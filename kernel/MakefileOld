@@ -1,0 +1,35 @@
+CC=i686-elf-gcc
+CFLAGS= -std=gnu99 -ffreestanding -O2 -Iinclude -Wall -Wextra
+OBJECTS=obj/boot.o obj/textmode.o obj/kernel.o obj/libc.o
+
+
+kernel: prep kernel.o boot.o textmode.o libc.o
+	$(CC) $(CFLAGS) -T arch/i386/linker.ld -o out/mykernel.bin -nostdlib $(OBJECTS) -lgcc
+
+boot.o:
+	i686-elf-as arch/i386/boot.s -o obj/boot.o
+
+kernel.o:
+	$(CC) -c kernel/kernel.c -o obj/kernel.o $(CFLAGS)
+
+textmode.o:
+	$(CC) -c drivers/vga/textmode.c -o obj/textmode.o $(CFLAGS)
+
+libc.o:
+	$(CC) -c libc/libc.c -o obj/libc.o $(CFLAGS)
+
+
+cleanobj:
+	rm -rf obj/*
+
+cleankern: cleanobj
+	rm -rf out/mykernel.bin
+
+clean: cleanobj cleankern
+
+prep: cleanobj
+	rm -rf obj/
+	mkdir obj
+
+run:
+	qemu-system-i386 -kernel out/mykernel.bin
