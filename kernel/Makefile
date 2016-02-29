@@ -15,16 +15,13 @@ INCLUDEDIR?=$(PREFIX)/include
 CFLAGS:=$(CFLAGS) -ffreestanding -fbuiltin -Wall -Wextra
 CPPFLAGS:=$(CPPFLAGS) -D__is_shawnos_kernel -Iinclude
 LDFLAGS:=$(LDFLAGS)
-LIBS:=$(LIBS) -nostdlib -lgcc
+LIBS:=$(LIBS) -nostdlib -lsk -lgcc
 
 ARCHDIR:=arch/$(HOSTARCH)
 
 #Pre-lined objects
 include drivers/vga/make.config
 include $(ARCHDIR)/make.config
-
-#Post-linked objects
-include libsk/make.config
 
 
 CFLAGS:=$(CFLAGS) $(KERNEL_ARCH_CFLAGS)

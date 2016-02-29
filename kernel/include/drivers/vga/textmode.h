@@ -1,6 +1,11 @@
 #ifndef _VGA_TEXTMODE_H
 #define _VGA_TEXTMODE_H 1
 
+#include <stddef.h>
+#include <stdint.h>
+
+
+
 /**
  * Functions for interfacing with the basic VGA text-mode buffer
  * Used for primitive video output
