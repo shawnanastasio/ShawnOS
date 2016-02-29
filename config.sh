@@ -1,5 +1,5 @@
-SYSTEM_HEADER_PROJECTS="kernel"
-PROJECTS="kernel"
+SYSTEM_HEADER_PROJECTS="libsc kernel"
+PROJECTS="libsc kernel"
 
 export MAKE=${MAKE:-make}
 export HOST=${HOST:-$(./default-host.sh)}
@@ -25,5 +25,3 @@ export CC="$CC --sysroot=$PWD/sysroot"
 if echo "$HOST" | grep -Eq -- '-elf($|-)'; then
   export CC="$CC -isystem=$INCLUDEDIR"
 fi
-
-
