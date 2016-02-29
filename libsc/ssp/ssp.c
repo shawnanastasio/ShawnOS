@@ -1,5 +1,5 @@
-#include <stdint.h>
 #include <stdlib.h>
+#include <stdint.h>
 
 #if UINT32_MAX == UINTPTR_MAX
 #define STACK_CHK_GUARD 0xe2dee396
@@ -15,6 +15,7 @@ void __stack_chk_fail(void)
 #if __STDC_HOSTED__
 	abort();
 #elif __is_shawnos_kernel
-	panic("Stack smashing detected");
+  // TODO: Add proper kernel panic in stack protector
+	abort();
 #endif
 }
