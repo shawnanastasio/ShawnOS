@@ -65,6 +65,11 @@ shawnos.kernel: $(OBJ_LINK_LIST) $(ARCHDIR)/linker.ld
 %.o: %.S
 	$(CC) -c $< -o $@ $(CFLAGS) $(CPPFLAGS)
 
+
+#TODO: make makefile NASM non-hardcoded to elf32
+%.o: %.asm
+	nasm -felf32 $< -o $@
+
 clean:
 	rm -f shawnos.kernel $(OBJS) $(ALL_OUR_OBJS) *.o */*.o */*/*.o
 
