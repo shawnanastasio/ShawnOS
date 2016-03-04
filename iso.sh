@@ -7,9 +7,9 @@ mkdir -p isodir/boot
 mkdir -p isodir/boot/grub
 
 # Check to make sure we have grub(2)-mkrescue
-if type grub-mkrescue >/dev/null; then
+if type grub-mkrescue 2>/dev/null; then
     MKRESCUE="grub-mkrescue"
-elif type grub2-mkrescue >/dev/null; then
+elif type grub2-mkrescue 2>/dev/null; then
     MKRESCUE="grub2-mkrescue"
 else
     echo "Please ensure grub-mkrescue or grub2-mkrescue is installed and in your path"
