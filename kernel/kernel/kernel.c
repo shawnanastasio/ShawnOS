@@ -7,9 +7,13 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>
+#include <stdio.h>
 
 /* Driver Includes */
 #include <drivers/vga/textmode.h>
+
+/* Architecture specific includes */
+#include <arch/i386/descriptors/gdt.h>
 
 void kernel_main() {
 	/* Initialize terminal interface */
@@ -26,6 +30,8 @@ void kernel_main() {
   vga_textmode_setcolor(make_color(COLOR_LIGHT_GREY, COLOR_BLACK));
   vga_textmode_writestring("!\n");
 
-	printf("God bless %s!\n", "printf");
+	gdt_install();
+
+	printf("GDT Installed!\n");
 
 }

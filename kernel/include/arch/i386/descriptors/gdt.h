@@ -1,0 +1,1 @@
+void gdt_install();
