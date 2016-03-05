@@ -30,7 +30,7 @@ void kernel_main() {
   vga_textmode_setcolor(make_color(COLOR_LIGHT_GREY, COLOR_BLACK));
   vga_textmode_writestring("!\n");
 
-	_gdt_install();
+	gdt_install();
 
 	printf("GDT Installed!\n");
 
