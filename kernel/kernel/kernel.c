@@ -15,10 +15,13 @@
 /* Architecture specific includes */
 #include <arch/i386/descriptors/gdt.h>
 
-void kernel_main() {
-	/* Initialize terminal interface */
+void kernel_early() {
 	vga_textmode_initialize();
+	gdt_install();
+	printf("DEBUG: GDT Installed!\n");
+}
 
+void kernel_main() {
   // Display welcome message
   vga_textmode_writestring("Welcome to ");
   vga_textmode_setcolor(COLOR_CYAN);
@@ -29,9 +32,4 @@ void kernel_main() {
   vga_textmode_writestring("0.01 Alpha");
   vga_textmode_setcolor(make_color(COLOR_LIGHT_GREY, COLOR_BLACK));
   vga_textmode_writestring("!\n");
-
-	gdt_install();
-
-	printf("GDT Installed!\n");
-
 }
