@@ -14,11 +14,13 @@
 
 /* Architecture specific includes */
 #include <arch/i386/descriptors/gdt.h>
+extern void _386_pmode();
 
 void kernel_early() {
 	vga_textmode_initialize();
 	gdt_install();
 	printf("DEBUG: GDT Installed!\n");
+	_386_pmode();
 }
 
 void kernel_main() {
@@ -32,4 +34,8 @@ void kernel_main() {
   vga_textmode_writestring("0.01 Alpha");
   vga_textmode_setcolor(make_color(COLOR_LIGHT_GREY, COLOR_BLACK));
   vga_textmode_writestring("!\n");
+}
+
+void kernel_pmode() {
+	vga_textmode_writestring("Protected mode\n");
 }
