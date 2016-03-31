@@ -57,3 +57,4 @@ Resources
 Much of the code from ShawnOS is adapted from or inspired by the following resources:
 
 [The OSDev Wiki](https://wiki.osdev.net)
+[Bran's Kernel Development Tutorial](http://www.osdever.net/bkerndev/Docs/title.htm)
