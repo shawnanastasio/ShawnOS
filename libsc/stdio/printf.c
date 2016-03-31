@@ -51,6 +51,27 @@ int printf(const char* restrict format, ...)
 			char c = (char) va_arg(parameters, int /* char promotes to int */);
 			print(&c, sizeof(c));
 		}
+        else if ( *format == 'd' )
+        {
+            format++;
+            int d = (int) va_arg(parameters, int);
+            int size = 0;
+
+            /* Determine size of buffer */
+            int temp = d;
+            while(temp) { ++size; temp /= 10; }
+            char buffer[size];
+
+            /* Get each individual digit and add to buffer as char*/
+            int i;
+            for(i=0; d; i++)
+            {
+                buffer[size-i-1] = (d % 10) + 48;
+                d /= 10;
+            }
+
+            print(buffer, size);
+        }
 		else if ( *format == 's' )
 		{
 			format++;
