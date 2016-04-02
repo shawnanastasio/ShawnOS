@@ -8,7 +8,9 @@ struct gdt_ptr gp;
 
 extern void _gdt_flush();
 
-void _gdt_set_gate(int32_t num, uint64_t base, uint64_t limit, uint8_t access, uint8_t gran) {
+void _gdt_set_gate(int32_t num, uint64_t base, uint64_t limit,
+                   uint8_t access, uint8_t gran)
+{
   gdt[num].base_low = (base & 0xFFFF);
   gdt[num].base_middle = (base >> 16) & 0xFF;
   gdt[num].base_high = (base >> 24) & 0xF;
@@ -35,8 +37,8 @@ void gdt_install() {
   _gdt_set_gate(1, 0, 0xFFFFFFFF, 0x9A, 0xCF);
   _gdt_set_gate(2, 0, 0xFFFFFFFF, 0x92, 0xCF);
   //TSS
-  uint32_t tss = (uint32_t)tss_return();
-  _gdt_set_gate(3, tss, sizeof(struct tss), 0x89, 0xCF);
+  //uint32_t tss = (uint32_t)tss_return();
+  //_gdt_set_gate(3, tss, sizeof(struct tss), 0x89, 0xCF);
 
   _gdt_flush();
 }
