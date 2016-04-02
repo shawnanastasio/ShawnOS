@@ -14,8 +14,8 @@ LIBDIR?=$(EXEC_PREFIX)/lib
 
 CFLAGS:=$(CFLAGS) -Wall -Wextra
 CPPFLAGS:=$(CPPFLAGS) -D__is_shawnos_libc -Iinclude
-LIBK_CFLAGS:=$(CFLAGS) -ffreestanding -fbuiltin
-LIBK_CPPFLAGS:=$(CPPFLAGS) -D__is_shawnos_kernel
+LIBSK_CFLAGS:=$(CFLAGS) -ffreestanding -fbuiltin
+LIBSK_CPPFLAGS:=$(CPPFLAGS) -D__is_shawnos_kernel
 
 ARCHDIR:=arch/$(HOSTARCH)
 
@@ -23,8 +23,8 @@ include $(ARCHDIR)/make.config
 
 CFLAGS:=$(CFLAGS) $(ARCH_CFLAGS)
 CPPFLAGS:=$(CPPFLAGS) $(ARCH_CPPFLAGS)
-LIBK_CFLAGS:=$(LIBK_CFLAGS) $(KERNEL_ARCH_CFLAGS)
-LIBK_CPPFLAGS:=$(LIBK_CPPFLAGS) $(KERNEL_ARCH_CPPFLAGS)
+LIBSK_CFLAGS:=$(LIBSK_CFLAGS) $(KERNEL_ARCH_CFLAGS)
+LIBSK_CPPFLAGS:=$(LIBSK_CPPFLAGS) $(KERNEL_ARCH_CPPFLAGS)
 
 FREEOBJS:=\
 $(ARCH_FREEOBJS) \
@@ -47,7 +47,7 @@ OBJS:=\
 $(FREEOBJS) \
 $(HOSTEDOBJS) \
 
-LIBSK_OBJS:=$(FREEOBJS:.o=.libk.o)
+LIBSK_OBJS:=$(FREEOBJS:.o=.libsk.o)
 
 BINARIES=libsc.a libg.a libsk.a
 
@@ -70,11 +70,18 @@ libsk.a: $(LIBSK_OBJS)
 %.o: %.S
 	$(CC) -c $< -o $@ $(CFLAGS) $(CPPFLAGS)
 
-%.libk.o: %.c
-	$(CC) -c $< -o $@ -std=gnu11 $(LIBK_CFLAGS) $(LIBK_CPPFLAGS)
+#TODO: make makefile NASM non-hardcoded to elf32
+%.o: %.asm
+	nasm -felf32 $< -o $@
 
-%.libk.o: %.S
-	$(CC) -c $< -o $@ $(LIBK_CFLAGS) $(LIBK_CPPFLAGS)
+%.libsk.o: %.asm
+	nasm -felf32 $< -o $@
+
+%.libsk.o: %.c
+	$(CC) -c $< -o $@ -std=gnu11 $(LIBSK_CFLAGS) $(LIBSK_CPPFLAGS)
+
+%.libsk.o: %.S
+	$(CC) -c $< -o $@ $(LIBSK_CFLAGS) $(LIBSK_CPPFLAGS)
 
 clean:
 	rm -f $(BINARIES) $(OBJS) $(LIBSK_OBJS) *.o */*.o */*/*.o
