@@ -57,10 +57,19 @@ int printf(const char* restrict format, ...)
             int d = (int) va_arg(parameters, int);
             int size = 0;
 
+            //Zero override
+            if (d==0) {
+                char buffer[1];
+                buffer[0] = 48;
+                print(buffer, 1);
+            }
+
             /* Determine size of buffer */
             int temp = d;
             while(temp) { ++size; temp /= 10; }
+            //if (temp == 0) {size = 1;}
             char buffer[size];
+
 
             /* Get each individual digit and add to buffer as char*/
             int i;
