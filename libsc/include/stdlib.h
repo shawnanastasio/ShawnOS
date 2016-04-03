@@ -7,6 +7,8 @@
 extern "C" {
 #endif
 
+void itoa(int n, char s[]);
+
 __attribute__((__noreturn__))
 void abort(void);
 

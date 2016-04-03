@@ -60,7 +60,7 @@ int printf(const char* restrict format, ...)
             //Zero override
             if (d==0) {
                 char buffer[1];
-                buffer[0] = 48;
+                buffer[0] = '0';
                 print(buffer, 1);
             }
 
@@ -75,7 +75,7 @@ int printf(const char* restrict format, ...)
             int i;
             for(i=0; d; i++)
             {
-                buffer[size-i-1] = (d % 10) + 48;
+                buffer[size-i-1] = (d % 10) + '0';
                 d /= 10;
             }
 
