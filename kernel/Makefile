@@ -20,6 +20,7 @@ LIBS:=$(LIBS) -nostdlib -lsk -lgcc
 ARCHDIR:=arch/$(HOSTARCH)
 
 #Pre-lined objects
+include drivers/pc/make.config
 include drivers/vga/make.config
 include $(ARCHDIR)/make.config
 
