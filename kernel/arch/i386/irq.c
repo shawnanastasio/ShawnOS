@@ -5,7 +5,10 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <pc.h>
+
+#include <kernel/kernel.h>
 
 #include <arch/i386/descriptors/idt.h>
 #include <arch/i386/isr.h>
@@ -98,7 +101,9 @@ void _irq_handler(struct regs *r) {
         handler(r);
     } else {
         //Until all IRQs are supported, print out debug message
-        printf("DEBUG: Don't know how to handle IRQ %d\n", (int)r->int_no-32);
+        char irq_num[3];
+        itoa(r->int_no-32, irq_num);
+        printk_debug(strcat("Don't know how to handle IRQ#", irq_num));
     }
 
     /* If the IDT entry that was invoked was greater than 40

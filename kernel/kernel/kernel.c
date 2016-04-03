@@ -8,6 +8,7 @@
 #include <stdint.h>
 #include <string.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 #include <kernel/kernel.h>
 
@@ -24,17 +25,18 @@
 #include <arch/i386/irq.h>
 extern void _i386_enter_pmode();
 
+
 void kernel_early() {
     // Set up i386 tables and functions
     vga_textmode_initialize();
     gdt_install();
-    printf("DEBUG: GDT Installed!\n");
+    printk_debug("GDT Installed!");
     _i386_enter_pmode();
-    printf("DEBUG: Protected mode entered!\n");
+    printk_debug("Protected mode entered!");
     idt_install();
-    printf("DEBUG: IDT Installed!\n");
+    printk_debug("IDT Installed!");
     __asm__ __volatile__ ("sti");
-    printf("DEBUG: Interrupts Enabled!\n");
+    printk_debug("Interrupts Enabled!");
 
     // Install drivers
     pit_timer_install_irq();
@@ -48,8 +50,6 @@ void kernel_early() {
 
 }
 
-extern struct idt_gate_debug idt_debug[256];
-
 void kernel_main() {
     // Display welcome message
     vga_textmode_writestring("Welcome to ");
@@ -62,20 +62,6 @@ void kernel_main() {
     vga_textmode_setcolor(make_color(COLOR_LIGHT_GREY, COLOR_BLACK));
     vga_textmode_writestring("!\n\n");
 
-    //_isr_debug();
-    /*
-    int a = 4;
-    int b = 0;
-    double kek = a/b;
-    printf("%f", kek);
-    */
-
-    //dump idt debug
-    int i;
-    for (i=45; i<48; i++) {
-        printf("%d\n", (int)idt_debug[i].base);
-    }
-
     for(;;);
 }
 
@@ -83,5 +69,16 @@ void kernel_main() {
  * Kernel task to be called at defined interval
  */
 void kernel_task() {
-    printf("DEBUG: kernel_task called!\n");
+    //printk_debug("kernel_task called!");
+}
+
+/**
+ * Prints a kernel DEBUG message
+ */
+void printk_debug(char *string) {
+    vga_textmode_setcolor(COLOR_RED);
+    vga_textmode_writestring("DEBUG: ");
+    vga_textmode_setcolor(make_color(COLOR_LIGHT_GREY, COLOR_BLACK));
+    vga_textmode_writestring(string);
+    vga_textmode_putchar('\n');
 }
