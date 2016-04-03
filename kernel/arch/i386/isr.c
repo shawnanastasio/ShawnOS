@@ -1,8 +1,11 @@
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 #include <arch/i386/descriptors/idt.h>
 #include <arch/i386/isr.h>
+#include <drivers/vga/textmode.h>
+
 
 extern void _isr0();
 extern void _isr1();
@@ -110,8 +113,15 @@ const char *exception_messages[] =
 
 void _fault_handler(struct regs *r) {
   if (r->int_no < 32) {
-    printf("%s\n", exception_messages[r->int_no]);
-    printf("HALT\n");
-    for(;;);
+    //TODO: Replace printing with syscalls or something
+    vga_textmode_setcolor(COLOR_RED);
+    vga_textmode_writestring("\n");
+    vga_textmode_writestring(exception_messages[r->int_no]);
+    vga_textmode_writestring("\n\nStack Dump:\n");
+    printf("EIP: %d\n", (int)r->eip);
+    printf("ESP: %d\n", (int)r->esp);
+    printf("Error Code: %d\n", (int)r->err_code);
+    printf("\nHALT\n");
+    abort();
   }
 }

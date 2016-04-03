@@ -3,6 +3,7 @@
 
 #include <arch/i386/descriptors/idt.h>
 #include <arch/i386/isr.h>
+#include <arch/i386/irq.h>
 
 struct idt_entry idt[256];
 struct idt_ptr idtp;
@@ -38,8 +39,12 @@ void idt_install() {
     //Wipe IDT
     memset(&idt, 0, sizeof(struct idt_entry) * 256);
 
-    //Install isrs
+    //Install ISRs
     _isr_install();
 
+    //Installs IRQs
+    _irq_install();
+
+    //Install IDT
     _idt_flush();
 }
