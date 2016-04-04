@@ -4,7 +4,7 @@
 
 #include <arch/i386/isr.h>
 
-#define PIT_TIMER_CONSTANT 100
+#define PIT_TIMER_CONSTANT 1000
 
 /**
  * Scheduler structure
