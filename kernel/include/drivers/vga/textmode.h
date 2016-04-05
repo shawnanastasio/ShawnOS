@@ -84,4 +84,9 @@
   */
  void vga_textmode_writestring(const char* data);
 
+ /**
+  * Clear screen
+  */
+ void vga_textmode_clear();
+
  #endif

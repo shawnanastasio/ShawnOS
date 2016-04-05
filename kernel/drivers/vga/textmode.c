@@ -6,6 +6,7 @@
  #include <stdbool.h>
  #include <stddef.h>
  #include <stdint.h>
+ #include <pc.h>
 
  #include <string.h>
 
@@ -138,6 +139,15 @@ void vga_textmode_putchar(char c) {
     //vga_textmode_row = 0;
     vga_textmode_scroll();
   }
+
+  // Update cursor position
+  size_t cur_pos = vga_textmode_row * 80 + vga_textmode_column;
+
+  // Write position to index 14 and 15 of VGA CRT control register
+  outportb(0x3D4, 14);
+  outportb(0x3D5, cur_pos >> 8);
+  outportb(0x3D4, 15);
+  outportb(0x3D5, cur_pos);
 }
 
 /**
@@ -148,4 +158,28 @@ void vga_textmode_writestring(const char* data) {
 	size_t datalen = strlen(data);
 	for (size_t i = 0; i < datalen; i++)
 		vga_textmode_putchar(data[i]);
+}
+
+/**
+ * Clear screen
+ */
+void vga_textmode_clear() {
+ vga_textmode_row = 0;
+ vga_textmode_column = 0;
+ vga_textmode_setcolor(make_color(COLOR_LIGHT_GREY, COLOR_BLACK));
+ for (size_t y = 0; y < VGA_HEIGHT; y++) {
+   for (size_t x = 0; x < VGA_WIDTH; x++) {
+     const size_t index = y * VGA_WIDTH + x;
+     vga_textmode_buffer[index] = make_vgaentry(' ', vga_textmode_color);
+   }
+ }
+
+ // Reset cursor position
+ size_t cur_pos = 0;
+
+ // Write position to index 14 and 15 of VGA CRT control register
+ outportb(0x3D4, 14);
+ outportb(0x3D5, cur_pos >> 8);
+ outportb(0x3D4, 15);
+ outportb(0x3D5, cur_pos);
 }

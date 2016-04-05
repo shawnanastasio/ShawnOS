@@ -33,7 +33,7 @@ void pckbd_irq_input_handler(struct regs *r) {
         unsigned char cur_char = pckbd_selected_scancode_table[cur_scancode];
 
         //For now, just print out debug to screen
-        printf("KEY PRESSED: %c\n", cur_char);
+        printf("%c", cur_char);
     }
 }
 
