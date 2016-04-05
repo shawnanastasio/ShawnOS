@@ -17,6 +17,7 @@
 
 /* Architecture specific driver includes */
 #include <drivers/pc/pit.h>
+#include <drivers/pc/pckbd.h>
 
 /* Architecture specific includes */
 #include <pc.h>
@@ -39,7 +40,8 @@ void kernel_early() {
     printk_debug("Interrupts Enabled!");
 
     // Install drivers
-    pit_timer_install_irq();
+    pit_timer_install_irq(); // Install PIT driver
+    pckbd_install_irq(pckbd_us_qwerty_sc); // Install US PS/2 Driver
 
     //Add kernel task to PIT
     struct pit_routine kernel_task_pit_routine = {

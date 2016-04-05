@@ -9,7 +9,6 @@
 #include <pc.h>
 
 #include <kernel/kernel.h>
-#include <drivers/pc/pckbd.h>
 #include <arch/i386/isr.h>
 #include <arch/i386/irq.h>
 
@@ -34,10 +33,7 @@ void pckbd_irq_input_handler(struct regs *r) {
         unsigned char cur_char = pckbd_selected_scancode_table[cur_scancode];
 
         //For now, just print out debug to screen
-        char temp[2];
-        temp[0] = (char)cur_char;
-        temp[1] = '\0';
-        printk_debug(strcat("KEY PRESSED: ", temp));
+        printf("KEY PRESSED: %c\n", cur_char);
     }
 }
 

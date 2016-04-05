@@ -1,6 +1,5 @@
 #pragma once
 
-
 void pckbd_install_irq(unsigned char *scancode_table);
 
 /**
