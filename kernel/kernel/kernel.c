@@ -11,6 +11,7 @@
 #include <stdlib.h>
 
 #include <kernel/kernel.h>
+#include <kernel/kernel_thread.h>
 
 /* Driver includes */
 #include <drivers/vga/textmode.h>
@@ -70,6 +71,7 @@ void kernel_main() {
 /**
  * Kernel task to be called at defined interval
  */
+extern uint32_t pit_total_timer_ticks;
 void kernel_task() {
     //printk_debug("kernel_task called!");
 }

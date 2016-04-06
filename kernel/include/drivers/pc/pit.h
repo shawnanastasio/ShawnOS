@@ -21,3 +21,4 @@ void pit_set_timer_phase(int16_t hz);
 void pit_irq_timer_handler(struct regs *r);
 void pit_timer_install_irq();
 uint32_t pit_get_total_ticks();
+void pit_timer_wait(uint32_t seconds);

@@ -93,3 +93,9 @@ void pit_timer_install_irq() {
 uint32_t pit_get_total_ticks() {
     return pit_total_timer_ticks;
 }
+
+// Wait specified number of seconds
+void pit_timer_wait(uint32_t seconds) {
+  uint32_t desired_ticks = pit_total_timer_ticks + (seconds * PIT_TIMER_CONSTANT);
+  while (desired_ticks > pit_total_timer_ticks);
+}

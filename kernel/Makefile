@@ -23,7 +23,7 @@ ARCHDIR:=arch/$(HOSTARCH)
 include drivers/pc/make.config
 include drivers/vga/make.config
 include $(ARCHDIR)/make.config
-
+include kernel/make.config
 
 CFLAGS:=$(CFLAGS) $(KERNEL_ARCH_CFLAGS)
 CPPFLAGS:=$(CPPFLAGS) $(KERNEL_ARCH_CPPFLAGS)
@@ -32,7 +32,6 @@ LIBS:=$(LIBS) $(KERNEL_ARCH_LIBS)
 
 OBJS:=\
 $(KERNEL_ARCH_OBJS_PRE) \
-kernel/kernel.o \
 $(KERNEL_ARCH_OBJS) \
 
 
