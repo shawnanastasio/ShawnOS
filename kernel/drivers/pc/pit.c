@@ -59,7 +59,7 @@ void pit_set_timer_phase(int16_t hz) {
 }
 
 // Total number of ticks since system has been running
-uint32_t pit_total_timer_ticks = 0;
+volatile uint32_t pit_total_timer_ticks = 0;
 
 // IRQ routine to handle PIT tick
 void pit_irq_timer_handler(struct regs *r) {
