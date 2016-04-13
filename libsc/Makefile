@@ -39,6 +39,7 @@ string/memmove.o \
 string/memset.o \
 string/strlen.o \
 string/strcpy.o \
+string/strncpy.o \
 string/strcat.o \
 ssp/ssp.o \
 
