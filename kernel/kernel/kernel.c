@@ -37,8 +37,6 @@ void kernel_early() {
     printk_debug("Protected mode entered!");
     idt_install();
     printk_debug("IDT Installed!");
-    __asm__ __volatile__ ("sti");
-    printk_debug("Interrupts Enabled!");
 
     // Install drivers
     pit_timer_install_irq(); // Install PIT driver
@@ -51,6 +49,8 @@ void kernel_early() {
     };
     pit_install_scheduler_routine(kernel_task_pit_routine);
 
+    __asm__ __volatile__ ("sti");
+    printk_debug("Interrupts Enabled!");
 }
 
 void kernel_main() {
@@ -71,7 +71,6 @@ void kernel_main() {
 /**
  * Kernel task to be called at defined interval
  */
-extern uint32_t pit_total_timer_ticks;
 void kernel_task() {
     //printk_debug("kernel_task called!");
 }
