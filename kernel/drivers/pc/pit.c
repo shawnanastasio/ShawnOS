@@ -47,7 +47,7 @@ uint16_t pit_install_scheduler_routine(struct pit_routine r) {
  * Uninstalls a routine from the PIT scheduler
  */
 void pit_uninstall_scheduler_routine(uint16_t index) {
-    _pit_routines[index].sec = 0;
+    _pit_routines[index].ms = 0;
 }
 
 // Set rate in Hz for PIT ticks
@@ -73,8 +73,8 @@ void pit_irq_timer_handler(struct regs *r) {
     // Check if we have to trigger any pit routines
     int i;
     for (i=0; i<_pit_routines_size; i++) {
-        if (pit_total_timer_ticks % (PIT_TIMER_CONSTANT *
-            _pit_routines[i].sec) == 0) //If this pit routine is to be triggered
+        if (pit_total_timer_ticks % ((PIT_TIMER_CONSTANT/1000) *
+            _pit_routines[i].ms) == 0) //If this pit routine is to be triggered
         {
             void (*__current_routine)(void);
             __current_routine = _pit_routines[i].func;
@@ -97,5 +97,11 @@ uint32_t pit_get_total_ticks() {
 // Wait specified number of seconds
 void pit_timer_wait(uint32_t seconds) {
   uint32_t desired_ticks = pit_total_timer_ticks + (seconds * PIT_TIMER_CONSTANT);
+  while (desired_ticks > pit_total_timer_ticks);
+}
+
+// Wait specified number of milliseconds
+void pit_timer_wait_ms(uint32_t ms) {
+  uint32_t desired_ticks = pit_total_timer_ticks + (ms * (PIT_TIMER_CONSTANT/1000));
   while (desired_ticks > pit_total_timer_ticks);
 }

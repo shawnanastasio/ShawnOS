@@ -10,7 +10,7 @@
  * Scheduler structure
  */
 struct pit_routine {
-    uint32_t sec; // Number of seconds between each trigger
+    uint32_t ms; // Number of milliseconds between each trigger
     void *func; // Function to call at each interval
 };
 
@@ -22,3 +22,4 @@ void pit_irq_timer_handler(struct regs *r);
 void pit_timer_install_irq();
 uint32_t pit_get_total_ticks();
 void pit_timer_wait(uint32_t seconds);
+void pit_timer_wait_ms(uint32_t ms);
