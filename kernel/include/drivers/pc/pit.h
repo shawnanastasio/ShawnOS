@@ -4,13 +4,13 @@
 
 #include <arch/i386/isr.h>
 
-#define PIT_TIMER_CONSTANT 1000
+#define PIT_TIMER_CONSTANT 10000
 
 /**
  * Scheduler structure
  */
 struct pit_routine {
-    uint32_t ms; // Number of milliseconds between each trigger
+    uint32_t hz; // Number of milliseconds between each trigger
     void *func; // Function to call at each interval
 };
 
