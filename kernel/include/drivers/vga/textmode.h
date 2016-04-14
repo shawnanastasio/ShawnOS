@@ -4,7 +4,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
-
+#define VGA_WIDTH 80
+#define VGA_HEIGHT 25
 
 /**
  * Functions for interfacing with the basic VGA text-mode buffer
