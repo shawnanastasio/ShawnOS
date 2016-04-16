@@ -19,6 +19,9 @@ $ sudo apt-get install nasm xorriso
 
 # Fedora
 $ sudo dnf install nasm xorriso
+
+# Arch Linux
+$ sudo pacman -S nasm xorriso
 ```
 
 
