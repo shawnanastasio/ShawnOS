@@ -20,8 +20,8 @@ $ sudo apt-get install nasm xorriso
 # Fedora
 $ sudo dnf install nasm xorriso
 
-# Arch Linux
-$ sudo pacman -S nasm xorriso
+# Arch Linux (note mtools is needed to stop GRUB from automatically trying to generate an EFI image)
+$ sudo pacman -S nasm xorriso mtools
 ```
 
 
