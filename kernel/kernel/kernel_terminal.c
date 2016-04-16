@@ -15,7 +15,7 @@ size_t cur_xpos = 0;
 size_t cur_ypos = 0;
 uint8_t color;
 
-char terminal_buffer[VGA_HEIGHT * VGA_WIDTH];
+uint16_t terminal_buffer[VGA_HEIGHT * VGA_WIDTH];
 uint16_t terminal_buffer_length = 0;
 
 void kernel_terminal_init(uint16_t refresh_rate) {
@@ -46,12 +46,12 @@ void kernel_terminal_update_tick() {
     vga_textmode_clear();
 
     // Restore old text from our buffer
-    vga_textmode_writestring(terminal_buffer);
+    vga_textmode_writebuffer(terminal_buffer, terminal_buffer_length);
 
     // Update buffer
     for(i=0; i<stdout_buffer_length; i++) {
       vga_textmode_putentryat(stdout_buffer[i], color, cur_xpos++, cur_ypos);
-      terminal_buffer[terminal_buffer_length++] = stdout_buffer[i];
+      terminal_buffer[terminal_buffer_length++] = make_vgaentry(stdout_buffer[i], color);
     }
   }
 }

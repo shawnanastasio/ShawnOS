@@ -183,3 +183,10 @@ void vga_textmode_clear() {
  outportb(0x3D4, 15);
  outportb(0x3D5, cur_pos);
 }
+
+void vga_textmode_writebuffer(uint16_t* newbuffer, uint16_t newbuffer_length) {
+  uint16_t i;
+  for (i=0; i<newbuffer_length; i++) {
+    vga_textmode_buffer[i] = newbuffer[i];
+  }
+}

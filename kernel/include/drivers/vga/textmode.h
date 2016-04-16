@@ -90,4 +90,6 @@
   */
  void vga_textmode_clear();
 
+ void vga_textmode_writebuffer(uint16_t* newbuffer, uint16_t newbuffer_length);
+
  #endif
