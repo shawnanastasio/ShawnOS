@@ -37,18 +37,21 @@ void kernel_terminal_init(uint16_t refresh_rate) {
 void kernel_terminal_update_tick() {
   uint16_t i;
 
-  // Clear current console
-  vga_textmode_clear();
-
-  // Restore old text from our buffer
-  vga_textmode_writestring(terminal_buffer);
-
   // Get kernel STDOUT buffer
   char stdout_buffer[STDOUT_MAX_BUFFER];
   uint16_t stdout_buffer_length = kernel_buffer_stdout_get(stdout_buffer);
 
-  for(i=0; i<stdout_buffer_length; i++) {
-    vga_textmode_putentryat(stdout_buffer[i], color, cur_xpos++, cur_ypos++);
-    terminal_buffer[terminal_buffer_length++] = stdout_buffer[i];
+  if(stdout_buffer_length != 0) {
+    // refresh current console
+    vga_textmode_clear();
+
+    // Restore old text from our buffer
+    vga_textmode_writestring(terminal_buffer);
+
+    // Update buffer
+    for(i=0; i<stdout_buffer_length; i++) {
+      vga_textmode_putentryat(stdout_buffer[i], color, cur_xpos++, cur_ypos);
+      terminal_buffer[terminal_buffer_length++] = stdout_buffer[i];
+    }
   }
 }
