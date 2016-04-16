@@ -32,10 +32,10 @@ extern void _i386_enter_pmode();
 
 void kernel_early() {
   // Set up kernel terminal for early output
-  //kernel_terminal_init(14);
+  kernel_terminal_init(14);
 
   // Set up i386 tables and functions
-  vga_textmode_initialize();
+  //vga_textmode_initialize();
   gdt_install();
   printk_debug("GDT Installed!");
   _i386_enter_pmode();
@@ -72,7 +72,6 @@ void kernel_main() {
 
   // Test kernel terminal
   kernel_buffer_stdout_writestring("Hello, Terminal!", strlen("Hello, Terminal!"));
-
   for(;;);
 }
 
