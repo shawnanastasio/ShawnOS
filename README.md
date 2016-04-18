@@ -5,6 +5,7 @@ ShawnOS is an Operating System/Kernel meant to help learn the fundamentals of Op
 
 The project is very much a work-in-progress at this point and many design decisions regarding the OS are yet to be made. Eventually, the project aims to reach a basic level of usability, with a functional console environment and C compiler.
 
+All code is licensed under the GNU GPL v3 unless explicitly stated elsewhere.
 
 Building
 ------
