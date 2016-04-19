@@ -1,6 +1,12 @@
 #pragma once
 
-void pckbd_install_irq(unsigned char *scancode_table);
+#include <stdint.h>
+
+#define PCKBD_SC_SIZE 128
+#define PCKBD_SPECIAL_SIZE 128
+
+void pckbd_install_irq(unsigned char *scancode_table, uint8_t *special_table);
+bool pckbd_check_special(char c);
 
 /**
  * Define scancode tables for different PS/2 keyboards
@@ -15,12 +21,12 @@ unsigned char pckbd_us_qwerty_sc[128] = {
     't', 'y', 'u', 'i', 'o', 'p', '[', ']', '\n',
     0,
     'a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l', ';',
-    '\'', '`',   0,
+    '\'', '`',   0, // Left Shift
     '\\', 'z', 'x', 'c', 'v', 'b', 'n',
-    'm', ',', '.', '/',   0,
+    'm', ',', '.', '/',   0, // Right Shift
     '*',
     0,	// Alt
-    ' ',	// Space bar
+    ' ',// Space bar
     0,	// Caps lock
     0,	// 59 - F1 key ... >
     0,   0,   0,   0,   0,   0,   0,   0,
@@ -44,4 +50,17 @@ unsigned char pckbd_us_qwerty_sc[128] = {
     0,	// F11 Key
     0,	// F12 Key
     0,	// All other keys are undefined
+};
+
+/**
+ * Special keys layout
+ * Order:
+ * 	LShift
+ * 	Caps Lock
+ */
+
+// US QWERTY
+uint8_t pckbd_us_qwerty_special[128] = {
+    42,
+    58
 };
