@@ -13,15 +13,13 @@
 #include <kernel/kernel.h>
 #include <arch/i386/isr.h>
 #include <arch/i386/irq.h>
+#include <drivers/pc/pckbd.h>
 
 unsigned char *pckbd_selected_scancode_table;
 uint8_t *pckbd_selected_special_table;
 bool pckbd_is_capital = false;
 bool pckbd_is_shift = false;
 
-bool pckbd_check_special(char c);
-#define PCKBD_SC_SIZE 128
-#define PCKBD_SPECIAL_SIZE 128
 
 void pckbd_irq_input_handler(struct regs *r) {
     if ((r->int_no-32) != 1) {
@@ -83,8 +81,8 @@ bool pckbd_check_special(char c) {
 }
 
 // Install pckbd handler with specificed scancode table to IRQ1
-void pckbd_install_irq(unsigned char *scancode_table, uint8_t *special_table) {
-    pckbd_selected_scancode_table = scancode_table;
-    pckbd_selected_special_table = special_table;
+void pckbd_install_irq(struct pckbd_driver *d) {
+    pckbd_selected_scancode_table = d->pckbd_sc;
+    pckbd_selected_special_table = d->pckbd_special;
     irq_install_handler(1, pckbd_irq_input_handler);
 }
