@@ -77,7 +77,6 @@ void kernel_terminal_update_tick() {
     // Restore old text from our buffer
     vga_textmode_writebuffer(terminal_buffer, VGA_WIDTH*VGA_HEIGHT);
 
-    // Update buffer
     for(i=0; i<stdout_buffer_length; i++) {
       char cur_char = stdout_buffer[i];
 
@@ -85,11 +84,14 @@ void kernel_terminal_update_tick() {
       if (kernel_terminal_check_escapecode(cur_char)) {
         kernel_terminal_handle_escapecode(cur_char);
       } else { // No escape codes
-        // Check for overflow and wrap text accordingly
-        //kernel_terminal_check_overflow();
 
-        vga_textmode_putentryat(cur_char, color, cur_xpos++, cur_ypos);
-        terminal_buffer[cur_ypos * VGA_WIDTH + cur_xpos] = make_vgaentry(cur_char, color);
+        // Check for overflow and wrap text accordingly
+        kernel_terminal_handle_overflow();
+
+        // Check for need to scroll and handle
+        // kernel_terminal_handle_scroll();
+
+        kernel_terminal_putentry(cur_char, color, cur_xpos++, cur_ypos);
       }
     }
 
@@ -111,6 +113,10 @@ bool kernel_terminal_check_escapecode(char c) {
   return false;
 }
 
+/**
+ * Handle escape code in terminal
+ * @param c [description]
+ */
 void kernel_terminal_handle_escapecode(char c) {
   //TODO: Insert logic to handle all escape codes
 
@@ -120,4 +126,26 @@ void kernel_terminal_handle_escapecode(char c) {
       cur_xpos = 0;
       break;
   }
+}
+
+void kernel_terminal_handle_overflow() {
+  if (cur_xpos >= VGA_WIDTH) {
+    cur_xpos = 0;
+    cur_ypos++;
+  }
+}
+
+/**
+ * Put character in both display buffer and local terminal buffer
+ * @param c     char to put
+ * @param color color of char to put
+ * @param x     x coordinate
+ * @param y     y coordinate
+ */
+void kernel_terminal_putentry(char c, uint8_t color, size_t x, size_t y) {
+  // Update actual VGA output
+  vga_textmode_putentryat(c, color, x, y);
+
+  // Update local buffer
+  terminal_buffer[y * VGA_WIDTH + x] = make_vgaentry(c, color);
 }
