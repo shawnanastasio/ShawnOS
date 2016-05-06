@@ -17,6 +17,7 @@
 
 /* Driver includes */
 #include <drivers/vga/textmode.h>
+#include <drivers/pci/driver.h>
 
 /* Architecture specific driver includes */
 #include <drivers/pc/pit.h>
@@ -70,9 +71,14 @@ void kernel_main() {
   vga_textmode_writestring("0.01 Alpha");
   vga_textmode_setcolor(make_color(COLOR_LIGHT_GREY, COLOR_BLACK));
   vga_textmode_writestring("!\n\n");
+  uint16_t vendor_test = pci_get_vendor_id(0, 1); // returns a uint16_t
+  printf("Bus 0 slot 1 vendor: %d\n", vendor_test);
+  uint16_t device_test = pci_get_device_id(0, 1);
+  printf("Bus 0 slot 1 device: %d\n", device_test);
+
 
   // Test kernel terminal
-  kernel_buffer_stdout_writestring("Hello, Terminal!", strlen("Hello, Terminal!"));
+  //kernel_buffer_stdout_writestring("Hello, Terminal!", strlen("Hello, Terminal!"));
   for(;;);
 }
 
