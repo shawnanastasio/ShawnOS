@@ -17,6 +17,7 @@
 
 /* Driver includes */
 #include <drivers/vga/textmode.h>
+#include <drivers/pci/driver.h>
 
 /* Architecture specific driver includes */
 #include <drivers/pc/pit.h>
@@ -82,7 +83,14 @@ void kernel_main() {
 
     // Test kernel terminal
     printf("Hello, Terminal!");
+
+    printf("Bus 0 slot 1 vendor: %d\n", vendor_test);
+    uint16_t device_test = pci_get_device_id(0, 1);
+    printf("Bus 0 slot 1 device: %d\n", device_test);
+
+
     for(;;);
+
 }
 
 /**
