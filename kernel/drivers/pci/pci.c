@@ -5,7 +5,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 
-#include <drivers/pci/driver.h>
+#include <drivers/pci/pci.h>
 #include <arch/i386/io.h>
 
 uint16_t pci_config_read_word(uint8_t bus, uint8_t slot, uint8_t func, uint8_t offset) {
@@ -28,17 +28,15 @@ uint16_t pci_config_read_word(uint8_t bus, uint8_t slot, uint8_t func, uint8_t o
   return(tmp);
 }
 
+// get pci device vendor id at bus slot
 uint16_t pci_get_vendor_id(uint8_t bus, uint8_t slot) {
   uint16_t vendor;
 
   vendor = pci_config_read_word(bus, slot, 0, 0);
-  if(vendor != 0xFFFF) {
-
-  }
-
   return vendor;
 }
 
+// get pci device ddevice id at bus slot
 uint16_t pci_get_device_id(uint8_t bus, uint8_t slot) {
   uint16_t device;
 

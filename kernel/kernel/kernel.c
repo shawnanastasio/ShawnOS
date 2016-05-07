@@ -17,7 +17,7 @@
 
 /* Driver includes */
 #include <drivers/vga/textmode.h>
-#include <drivers/pci/driver.h>
+#include <drivers/pci/pci.h>
 
 /* Architecture specific driver includes */
 #include <drivers/pc/pit.h>
