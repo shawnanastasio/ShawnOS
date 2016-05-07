@@ -81,6 +81,7 @@ uint16_t pci_get_device_subclass_id(uint16_t bus, uint16_t slot, uint16_t func) 
  * initialize PCI device array and such
  */
  void pci_init() {
+     printf("PCI scanning for PCI devices...\n");
      devices = 0;
      pci_probe();
  }

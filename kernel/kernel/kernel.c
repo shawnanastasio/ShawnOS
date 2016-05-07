@@ -10,6 +10,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+
 #include <kernel/kernel.h>
 #include <kernel/kernel_thread.h>
 #include <kernel/kernel_stdio.h>
@@ -30,6 +31,7 @@
 #include <arch/i386/descriptors/idt.h>
 #include <arch/i386/irq.h>
 #include <arch/i386/multiboot.h>
+#include <arch/i386/io.h>
 extern void _i386_enter_pmode();
 
 
@@ -47,12 +49,16 @@ void kernel_early(uint32_t mboot_magic, multiboot_header_t *mboot_header) {
 
     // Set up i386 tables and functions
     //vga_textmode_initialize();
+
+    // disable VGA textmode hardware cursor
+    IoWrite8(0x3D4, 0x0A);
+    IoWrite8(0x3D5, 0x20);
     gdt_install();
-    printk_debug("GDT Installed!");
+    //printk_debug("GDT Installed!");
     _i386_enter_pmode();
     printk_debug("Protected mode entered!");
     idt_install();
-    printk_debug("IDT Installed!");
+    //printk_debug("IDT Installed!");
 
     // Install drivers
     pit_timer_install_irq(); // Install PIT driver
@@ -66,11 +72,11 @@ void kernel_early(uint32_t mboot_magic, multiboot_header_t *mboot_header) {
     pit_install_scheduler_routine(kernel_task_pit_routine);
 
     __asm__ __volatile__ ("sti");
-    printk_debug("Interrupts Enabled!");
+    //printk_debug("Interrupts Enabled!");
+    pci_init();
 }
 
 void kernel_main() {
-    // Display welcome message
     vga_textmode_writestring("Welcome to ");
     vga_textmode_setcolor(COLOR_CYAN);
     vga_textmode_writestring("ShawnOS ");
@@ -81,18 +87,10 @@ void kernel_main() {
     vga_textmode_setcolor(make_color(COLOR_LIGHT_GREY, COLOR_BLACK));
     vga_textmode_writestring("!\n\n");
 
-    // Test kernel terminal
-    printf("Hello, Terminal!\n");
 
-    // uint16_t vendor_test = pci_get_vendor_id(0, 1, 0);
-    // printf("Bus 0 slot 1 vendor: %d\n", vendor_test);
-    // uint16_t device_test = pci_get_device_id(0, 1, 0);
-    // printf("Bus 0 slot 1 device: %d\n", device_test);
-    // uint16_t class_test = pci_get_device_class_id(0, 1, 0);
-    // printf("Bus 0 slot 1 class: %d\n", class_test);
-    // uint16_t subclass_test = pci_get_device_subclass_id(0, 1, 0);
-    // printf("Bus 0 slot 1 subclass: %d\n", subclass_test);
-    printf("initializing PCI...\n");
+    // Test kernel terminal
+    printf("Welcome to ShawnOS, version 0.01 ALPHA\n");
+    
     pci_init();
 
 
