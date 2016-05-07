@@ -2,14 +2,14 @@
 
 
 #if defined(__is_shawnos_kernel)
-#include <drivers/vga/textmode.h>
+#include <kernel/kernel_stdio.h>
 #endif
 
 int putchar(int ic)
 {
 #if defined(__is_shawnos_kernel)
 	char c = (char) ic;
-	vga_textmode_putchar(c);
+	kernel_buffer_stdout_writechar(c);
 #else
 	// TODO: You need to implement a write system call.
 #endif
