@@ -12,7 +12,7 @@
 #include <drivers/pc/pit.h>
 #include <drivers/vga/textmode.h>
 
-char kernel_terminal_escapecodes[15] =
+char kernel_terminal_escapecodes[ESCAPECODE_LENGTH] =
 {
     '\n',
     '\b',
@@ -35,6 +35,8 @@ char kernel_terminal_escapecodes[15] =
 size_t cur_xpos = 0;
 size_t cur_ypos = 0;
 uint8_t color;
+bool is_ansi_escape = false;
+uint8_t ansi_escape_length = 0;
 
 uint16_t terminal_buffer[VGA_HEIGHT * VGA_WIDTH];
 
@@ -81,7 +83,7 @@ void kernel_terminal_update_tick() {
             char cur_char = stdout_buffer[i];
 
             // Parse char for terminal escape codes
-            if (kernel_terminal_check_escapecode(cur_char)) {
+            if (kernel_terminal_check_escapecode(cur_char) || is_ansi_escape) {
                 kernel_terminal_handle_escapecode(cur_char);
             } else { // No escape codes
 
@@ -110,6 +112,13 @@ bool kernel_terminal_check_escapecode(char c) {
         }
     }
 
+    // Check for ESC character in the case of an ANSI escapecode
+    if (c == 27) {
+        is_ansi_escape = true;
+        ansi_escape_length = 1;
+        return true;
+    }
+
     return false;
 }
 
@@ -120,15 +129,36 @@ bool kernel_terminal_check_escapecode(char c) {
 void kernel_terminal_handle_escapecode(char c) {
     //TODO: Insert logic to handle all escape codes
 
+    // Handle normal escapes
     switch(c) {
         case '\n':
             cur_ypos++;
             cur_xpos = 0;
-            break;
+            return;
         case '\b':
             kernel_terminal_backspace();
-            break;
+            return;
     }
+
+    // Handle ANSI escapes
+    if (is_ansi_escape) {
+        switch(ansi_escape_length) {
+            case 1: // First char of ANSI escape code should be ESC (27)
+                if (c != 27) goto ansi_fail;
+                ++ansi_escape_length;
+                return;
+            case 2: // Second char should be left square bracket
+                if (c != '[') goto ansi_fail;
+                ++ansi_escape_length;
+
+
+        }
+    }
+
+ansi_fail:
+    is_ansi_escape = false;
+    ansi_escape_length = 0;
+    return;
 }
 
 void kernel_terminal_handle_overflow() {

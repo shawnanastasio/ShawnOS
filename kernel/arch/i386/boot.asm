@@ -30,9 +30,13 @@ global _start
 _start:
 	mov esp, stack_top
 
-	; We are now ready to actually execute C code. We cannot embed that in an
-	; assembly file, so we'll create a kernel.c file in a moment. In that file,
-	; we'll create a C entry point called kernel_main and call it here.
+    ; Ensure stack is 16-bit aligned
+    and esp, -16
+
+    ; Push multiboot header and magic
+    push ebx
+    push eax
+
 	extern kernel_early
 	call kernel_early
 
