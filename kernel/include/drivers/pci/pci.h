@@ -14,3 +14,5 @@ uint16_t pci_get_vendor_id(uint16_t bus, uint16_t slot, uint16_t func);
 uint16_t pci_get_device_id(uint16_t bus, uint16_t slot, uint16_t func);
 uint16_t pci_get_device_class_id(uint16_t bus, uint16_t slot, uint16_t func);
 uint16_t pci_get_device_subclass_id(uint16_t bus, uint16_t slot, uint16_t func);
+void pci_probe();
+void pci_init();

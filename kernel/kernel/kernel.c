@@ -84,10 +84,16 @@ void kernel_main() {
     // Test kernel terminal
     printf("Hello, Terminal!\n");
 
-    uint16_t vendor_test = pci_get_vendor_id(0, 1, 0);
-    printf("Bus 0 slot 1 vendor: %d\n", vendor_test);
-    uint16_t device_test = pci_get_device_id(0, 1, 0);
-    printf("Bus 0 slot 1 device: %d\n", device_test);
+    // uint16_t vendor_test = pci_get_vendor_id(0, 1, 0);
+    // printf("Bus 0 slot 1 vendor: %d\n", vendor_test);
+    // uint16_t device_test = pci_get_device_id(0, 1, 0);
+    // printf("Bus 0 slot 1 device: %d\n", device_test);
+    // uint16_t class_test = pci_get_device_class_id(0, 1, 0);
+    // printf("Bus 0 slot 1 class: %d\n", class_test);
+    // uint16_t subclass_test = pci_get_device_subclass_id(0, 1, 0);
+    // printf("Bus 0 slot 1 subclass: %d\n", subclass_test);
+    printf("initializing PCI...\n");
+    pci_init();
 
 
     for(;;);

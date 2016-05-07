@@ -8,6 +8,13 @@
 #include <drivers/pci/pci.h>
 #include <arch/i386/io.h>
 
+#include <kernel/kernel_stdio.h>
+#include <kernel/kernel_terminal.h>
+
+
+pci_device pci_devices[16];
+uint32_t devices = 0;
+
 /** pci_config_read_word
 * Reads word at offset from pci device at bus bus, device slot, and function func (for  multifunc device)
 */
@@ -69,3 +76,39 @@ uint16_t pci_get_device_subclass_id(uint16_t bus, uint16_t slot, uint16_t func) 
 
     return (subclass_id_seg & ~0xFF00);
 }
+
+/** pci_init
+ * initialize PCI device array and such
+ */
+ void pci_init() {
+     devices = 0;
+     pci_probe();
+ }
+
+ /** pci_probe
+  *  use a very inelegant brute force of the PCI bus and get the first 16 devices :D
+  */
+ void pci_probe() {
+     for(uint16_t bus = 0; bus < 256; bus++) {
+         for (uint16_t slot = 0; slot < 32; slot++) {
+             for(uint16_t function = 0; function < 8; function++) {
+                 uint16_t vendor_id = pci_get_vendor_id(bus, slot, function);
+                 if(vendor_id == 0xFFFF) continue;
+                 uint16_t device_id = pci_get_device_id(bus, slot, function);
+
+                 printf("[pci] v %d d %d f %d at %d, %d\n", vendor_id, device_id, function, slot, bus);
+                 if(devices > 15) {
+                     printf("[pci] not adding above device... limit reached\n");
+                     continue;
+                 }
+                 pci_device pcidev;
+                 pcidev.vendor = vendor_id;
+                 pcidev.device = device_id;
+                 pcidev.func = function;
+
+                 pci_devices[devices] = pcidev;
+                 devices++;
+             }
+         }
+     }
+ }
