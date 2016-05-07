@@ -81,7 +81,14 @@ void kernel_main() {
     vga_textmode_writestring("!\n\n");
 
     // Test kernel terminal
-    printf("Hello, Terminal!");
+    printf("Hello, Terminal!\n");
+
+    uint16_t vendor_test = pci_get_vendor_id(0, 1, 0);
+    printf("Bus 0 slot 1 vendor: %d\n", vendor_test);
+    uint16_t device_test = pci_get_device_id(0, 1, 0);
+    printf("Bus 0 slot 1 device: %d\n", device_test);
+
+
     for(;;);
 }
 
