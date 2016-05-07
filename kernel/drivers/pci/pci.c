@@ -65,7 +65,7 @@ uint16_t pci_get_device_class_id(uint16_t bus, uint16_t slot, uint16_t func) {
  */
 uint16_t pci_get_device_subclass_id(uint16_t bus, uint16_t slot, uint16_t func) {
     uint32_t subclass_id_seg;
-    subclass_id_seg = pci_read_word(bus, slot, func, 0xA);
+    subclass_id_seg = pci_config_read_word(bus, slot, func, 0xA);
 
     return (subclass_id_seg & ~0xFF00);
 }
