@@ -81,7 +81,7 @@ void kernel_main() {
     vga_textmode_writestring("!\n\n");
 
     // Test kernel terminal
-    kernel_buffer_stdout_writestring("Hello, Terminal!", strlen("Hello, Terminal!"));
+    printf("Hello, Terminal!");
     for(;;);
 }
 

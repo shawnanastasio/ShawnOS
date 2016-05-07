@@ -1,6 +1,7 @@
 #pragma once
 
 #include <stdint.h>
+#include <stddef.h>
 
 #define STDIN_MAX_BUFFER 256
 #define STDOUT_MAX_BUFFER 256
