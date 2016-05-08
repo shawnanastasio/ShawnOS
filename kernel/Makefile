@@ -22,6 +22,8 @@ ARCHDIR:=arch/$(HOSTARCH)
 #Pre-lined objects
 include drivers/pc/make.config
 include drivers/vga/make.config
+include drivers/pci/make.config
+#include drivers/sata/make.config
 include $(ARCHDIR)/make.config
 include kernel/make.config
 
