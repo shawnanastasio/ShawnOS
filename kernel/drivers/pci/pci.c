@@ -98,7 +98,10 @@ uint16_t pci_get_device_subclass_id(uint16_t bus, uint16_t slot, uint16_t func) 
                  uint16_t vendor_id = pci_get_vendor_id(bus, slot, function);
                  if(vendor_id == 0xFFFF) continue;
                  uint16_t device_id = pci_get_device_id(bus, slot, function);
-                 printf("[pci] %x:%x at %d, %d\n", vendor_id, device_id, bus, slot);
+                 uint16_t class_id = pci_get_device_class_id(bus, slot, function);
+                 printf("[pci] %x:%x - %s\n", vendor_id, device_id, PCI_CLASS_IDS[class_id]);
+
+
                  kernel_thread_sleep(1);
 
 
