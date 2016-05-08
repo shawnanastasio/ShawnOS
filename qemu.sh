@@ -9,6 +9,6 @@ else
     exit
 fi
 
-qemu-system-$(./target-triplet-to-arch.sh $HOST) -cdrom shawnos.iso
+qemu-system-$(./target-triplet-to-arch.sh $HOST) -device ich9-ahci,id=ahci -cdrom shawnos.iso
 
 
