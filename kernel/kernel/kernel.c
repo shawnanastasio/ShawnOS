@@ -37,7 +37,7 @@ extern void _i386_enter_pmode();
 
 void kernel_early(uint32_t mboot_magic, multiboot_header_t *mboot_header) {
     // Set up kernel terminal for early output
-    kernel_terminal_init(14);
+    kernel_terminal_init(100);
 
     // Verify multiboot magic
     if (mboot_magic != MULTIBOOT_EAX_MAGIC) {
@@ -54,11 +54,11 @@ void kernel_early(uint32_t mboot_magic, multiboot_header_t *mboot_header) {
     IoWrite8(0x3D4, 0x0A);
     IoWrite8(0x3D5, 0x20);
     gdt_install();
-    //printk_debug("GDT Installed!");
+    printk_debug("GDT Installed!");
     _i386_enter_pmode();
     printk_debug("Protected mode entered!");
     idt_install();
-    //printk_debug("IDT Installed!");
+    printk_debug("IDT Installed!");
 
     // Install drivers
     pit_timer_install_irq(); // Install PIT driver
@@ -71,27 +71,40 @@ void kernel_early(uint32_t mboot_magic, multiboot_header_t *mboot_header) {
     };
     pit_install_scheduler_routine(kernel_task_pit_routine);
 
+
+
     __asm__ __volatile__ ("sti");
-    //printk_debug("Interrupts Enabled!");
-    pci_init();
+    printk_debug("Interrupts Enabled!");
+
 }
 
 void kernel_main() {
-    vga_textmode_writestring("Welcome to ");
-    vga_textmode_setcolor(COLOR_CYAN);
-    vga_textmode_writestring("ShawnOS ");
-    vga_textmode_setcolor(make_color(COLOR_LIGHT_GREY, COLOR_BLACK));
-    vga_textmode_writestring("Version ");
-    vga_textmode_setcolor(COLOR_RED);
-    vga_textmode_writestring("0.01 Alpha");
-    vga_textmode_setcolor(make_color(COLOR_LIGHT_GREY, COLOR_BLACK));
-    vga_textmode_writestring("!\n\n");
+    // vga_textmode_writestring("Welcome to ");
+    // vga_textmode_setcolor(COLOR_CYAN);
+    // vga_textmode_writestring("ShawnOS ");
+    // vga_textmode_setcolor(make_color(COLOR_LIGHT_GREY, COLOR_BLACK));
+    // vga_textmode_writestring("Version ");
+    // vga_textmode_setcolor(COLOR_RED);
+    // vga_textmode_writestring("0.01 Alpha");
+    // vga_textmode_setcolor(make_color(COLOR_LIGHT_GREY, COLOR_BLACK));
+    // vga_textmode_writestring("!\n\n");
 
 
     // Test kernel terminal
-    printf("Welcome to ShawnOS, version 0.01 ALPHA\n");
-    
+
+
+
     pci_init();
+
+
+
+
+
+
+
+
+
+
 
 
     for(;;);

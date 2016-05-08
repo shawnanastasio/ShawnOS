@@ -126,7 +126,7 @@ void kernel_terminal_handle_scroll() {
                     terminal_buffer[index] = terminal_buffer[nextrow_index];
             }
         }
-        vga_textmode_writebuffer(terminal_buffer, VGA_WIDTH*VGA_HEIGHT);
+        //vga_textmode_writebuffer(terminal_buffer, VGA_WIDTH*VGA_HEIGHT);
         cur_ypos--;
     }
 }

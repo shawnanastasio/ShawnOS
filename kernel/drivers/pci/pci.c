@@ -12,6 +12,7 @@
 #include <kernel/kernel_terminal.h>
 
 
+
 pci_device pci_devices[16];
 uint32_t devices = 0;
 
@@ -93,11 +94,14 @@ uint16_t pci_get_device_subclass_id(uint16_t bus, uint16_t slot, uint16_t func) 
      for(uint16_t bus = 0; bus < 256; bus++) {
          for (uint16_t slot = 0; slot < 32; slot++) {
              for(uint16_t function = 0; function < 8; function++) {
+
                  uint16_t vendor_id = pci_get_vendor_id(bus, slot, function);
                  if(vendor_id == 0xFFFF) continue;
                  uint16_t device_id = pci_get_device_id(bus, slot, function);
+                 printf("[pci] %d:%d at %d, %d\n", vendor_id, device_id, bus, slot);
 
-                 printf("[pci] v %d d %d f %d at %d, %d\n", vendor_id, device_id, function, slot, bus);
+
+
                  if(devices > 15) {
                      printf("[pci] not adding above device... limit reached\n");
                      continue;
