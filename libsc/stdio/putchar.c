@@ -9,7 +9,8 @@ int putchar(int ic)
 {
 #if defined(__is_shawnos_kernel)
 	char c = (char) ic;
-	kernel_buffer_stdout_writechar(c);
+	//kernel_buffer_stdout_writechar(c);
+    vga_textmode_putchar(c);
 #else
 	// TODO: You need to implement a write system call.
 #endif

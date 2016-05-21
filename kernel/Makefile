@@ -23,6 +23,7 @@ ARCHDIR:=arch/$(HOSTARCH)
 include drivers/pc/make.config
 include drivers/vga/make.config
 include $(ARCHDIR)/make.config
+include kernel/mem/make.config
 include kernel/make.config
 
 CFLAGS:=$(CFLAGS) $(KERNEL_ARCH_CFLAGS)

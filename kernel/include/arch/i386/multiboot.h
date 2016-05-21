@@ -18,33 +18,32 @@
 #define MULTIBOOT_FLAG_VBE     0x400
 
 struct multiboot {
-    uintptr_t flags;
-    uintptr_t mem_lower;
-    uintptr_t mem_upper;
-    uintptr_t boot_device;
-    uintptr_t cmdline;
-    uintptr_t mods_count;
-    uintptr_t mods_addr;
-    uintptr_t num;
-    uintptr_t size;
-    uintptr_t addr;
-    uintptr_t shndx;
-    uintptr_t mmap_length;
-    uintptr_t mmap_addr;
-    uintptr_t drives_length;
-    uintptr_t drives_addr;
-    uintptr_t config_table;
-    uintptr_t boot_loader_name;
-    uintptr_t apm_table;
-    uintptr_t vbe_control_info;
-    uintptr_t vbe_mode_info;
-    uintptr_t vbe_mode;
-    uintptr_t vbe_interface_seg;
-    uintptr_t vbe_interface_off;
-    uintptr_t vbe_interface_len;
+    uint32_t flags;
+    uint32_t mem_lower;
+    uint32_t mem_upper;
+    uint32_t boot_device;
+    uint32_t cmdline;
+    uint32_t mods_count;
+    uint32_t mods_addr;
+    uint32_t num;
+    uint32_t size;
+    uint32_t addr;
+    uint32_t shndx;
+    uint32_t mmap_addr;
+    uint32_t drives_length;
+    uint32_t drives_addr;
+    uint32_t config_table;
+    uint32_t boot_loader_name;
+    uint32_t apm_table;
+    uint32_t vbe_control_info;
+    uint32_t vbe_mode_info;
+    uint16_t vbe_mode;
+    uint16_t vbe_interface_seg;
+    uint16_t vbe_interface_off;
+    uint16_t vbe_interface_len;
 } __attribute__ ((packed));
 
-typedef struct multiboot multiboot_header_t;
+typedef struct multiboot mboot_header_t;
 
 typedef struct {
     uint16_t attributes;
