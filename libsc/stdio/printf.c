@@ -81,6 +81,48 @@ int printf(const char* restrict format, ...)
 
             print(buffer, size);
         }
+        else if ( *format == 'x' )
+        {
+            format++;
+            int d = (int) va_arg(parameters, int);
+            int size = 0;
+            int divisor = 16;
+            //Zero override
+            if(d == 0) {
+                char buffer[1];
+                buffer[0] = '0';
+                print(buffer, 1);
+            }
+
+            // deterine size!
+            int temp = d;
+            while(temp) { ++size; temp /= 16; }
+            char buffer[size];
+
+            int loop = 0;
+            do {
+                int remainder = d % divisor;
+
+                buffer[loop++] = (remainder < 10) ? remainder + '0' : remainder + 'a' - 10;
+
+            } while (d /= divisor);
+
+            buffer[loop] = 0;
+
+            // reverse array
+            int tmp;
+            int start = 0;
+            int end = size - 1;
+            while(start < end) {
+                tmp = buffer[start];
+                buffer[start] = buffer[end];
+                buffer[end] = tmp;
+                start++;
+                end--;
+            }
+
+            print(buffer, size);
+        }
 		else if ( *format == 's' )
 		{
 			format++;

@@ -76,29 +76,69 @@ void kernel_terminal_update_tick() {
         // Refresh current console
         vga_textmode_clear();
 
-        // Restore old text from our buffer
-        vga_textmode_writebuffer(terminal_buffer, VGA_WIDTH*VGA_HEIGHT);
+
+
 
         for(i=0; i<stdout_buffer_length; i++) {
             char cur_char = stdout_buffer[i];
 
             // Parse char for terminal escape codes
+
+
             if (kernel_terminal_check_escapecode(cur_char) || is_ansi_escape) {
                 kernel_terminal_handle_escapecode(cur_char);
+                kernel_terminal_handle_scroll();
+                kernel_terminal_update_cursor();
             } else { // No escape codes
 
                 // Check for overflow and wrap text accordingly
+
                 kernel_terminal_handle_overflow();
+                kernel_terminal_handle_scroll();
 
                 // Check for need to scroll and handle
-                // kernel_terminal_handle_scroll();
+
 
                 kernel_terminal_putentry(cur_char, color, cur_xpos++, cur_ypos);
+                kernel_terminal_update_cursor();
             }
         }
+        // Restore old text from our buffer
+        vga_textmode_writebuffer(terminal_buffer, VGA_WIDTH*VGA_HEIGHT);
 
     }
 }
+
+/**
+ * Checks for need to scroll and does so if applicable
+ *
+ */
+void kernel_terminal_handle_scroll() {
+    if (cur_ypos == VGA_HEIGHT) {
+        for(size_t y = 0; y < VGA_HEIGHT; y++) {
+            for(size_t x = 0; x < VGA_WIDTH; x++) {
+                const size_t index = y * VGA_WIDTH + x;
+                const size_t nextrow_index = index + VGA_WIDTH;
+
+                if(y == VGA_HEIGHT-1)
+                    kernel_terminal_putentry(' ', color, x, y);
+                else
+                    terminal_buffer[index] = terminal_buffer[nextrow_index];
+            }
+        }
+        //vga_textmode_writebuffer(terminal_buffer, VGA_WIDTH*VGA_HEIGHT);
+        cur_ypos--;
+    }
+}
+
+void kernel_terminal_update_cursor() {
+    if(cur_xpos == 0)
+        kernel_terminal_putentry('_', color, cur_xpos, cur_ypos);
+    else {
+        kernel_terminal_putentry('_', color, cur_xpos, cur_ypos);
+    }
+}
+
 
 /**
  * Determines whether char is an escape code or not
@@ -132,8 +172,10 @@ void kernel_terminal_handle_escapecode(char c) {
     // Handle normal escapes
     switch(c) {
         case '\n':
+            kernel_terminal_putentry(' ', color, cur_xpos, cur_ypos);
             cur_ypos++;
             cur_xpos = 0;
+            kernel_terminal_update_cursor();
             return;
         case '\b':
             kernel_terminal_backspace();
@@ -172,12 +214,15 @@ void kernel_terminal_handle_overflow() {
  * Removes the last printed character in display and terminal buffer
  */
 void kernel_terminal_backspace() {
+    kernel_terminal_putentry(' ', color, cur_xpos, cur_ypos);
     if (cur_xpos == 0 && cur_ypos == 0) {
         kernel_terminal_putentry(' ', color, 0, 0);
-    } else if (cur_xpos == 0) {
-        kernel_terminal_putentry(' ', color, VGA_WIDTH, cur_ypos-1);
-    } else {
-        kernel_terminal_putentry(' ', color, cur_xpos-1, cur_ypos);
+    } else if(cur_xpos == 0) {
+        // do absolutely nothing! :D
+    }
+    else {
+        kernel_terminal_putentry(' ', color, cur_xpos, cur_ypos);
+        cur_xpos--;
     }
 }
 
