@@ -36,7 +36,7 @@ void kernel_buffer_stdout_flush() {
 }
 
 void kernel_buffer_stdin_writechar(char c) {
-    if (kernel_buffer_stdin_length >= 256) {
+    if (kernel_buffer_stdin_length >= STDIN_MAX_BUFFER) {
         kernel_buffer_stdin_flush();
     }
 
@@ -44,7 +44,7 @@ void kernel_buffer_stdin_writechar(char c) {
 }
 
 void kernel_buffer_stdout_writechar(char c) {
-    if (kernel_buffer_stdout_length >= 256) {
+    if (kernel_buffer_stdout_length >= STDOUT_MAX_BUFFER) {
         kernel_buffer_stdout_flush();
     }
 

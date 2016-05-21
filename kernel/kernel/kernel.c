@@ -10,6 +10,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+
 #include <kernel/kernel.h>
 #include <kernel/kernel_thread.h>
 #include <kernel/kernel_stdio.h>
@@ -18,6 +19,7 @@
 
 /* Driver includes */
 #include <drivers/vga/textmode.h>
+#include <drivers/pci/pci.h>
 
 /* Architecture specific driver includes */
 #include <drivers/pc/pit.h>
@@ -30,6 +32,7 @@
 #include <arch/i386/descriptors/idt.h>
 #include <arch/i386/irq.h>
 #include <arch/i386/multiboot.h>
+#include <arch/i386/io.h>
 extern void _i386_enter_pmode();
 
 
@@ -44,6 +47,7 @@ void kernel_early(uint32_t mboot_magic, mboot_header_t *mboot_header) {
 
     // Set up i386 tables and functions
     vga_textmode_initialize();
+
     gdt_install();
     printk_debug("GDT Installed!");
     _i386_enter_pmode();
@@ -62,6 +66,8 @@ void kernel_early(uint32_t mboot_magic, mboot_header_t *mboot_header) {
     };
     pit_install_scheduler_routine(kernel_task_pit_routine);
 
+
+
     __asm__ __volatile__ ("sti");
     printk_debug("Interrupts Enabled!");
 
@@ -72,7 +78,6 @@ void kernel_early(uint32_t mboot_magic, mboot_header_t *mboot_header) {
 }
 
 void kernel_main() {
-    // Display welcome message
     vga_textmode_writestring("Welcome to ");
     vga_textmode_setcolor(COLOR_CYAN);
     vga_textmode_writestring("ShawnOS ");
@@ -83,8 +88,8 @@ void kernel_main() {
     vga_textmode_setcolor(make_color(COLOR_LIGHT_GREY, COLOR_BLACK));
     vga_textmode_writestring("!\n\n");
 
-    // Test kernel terminal
-    printf("Hello, Terminal!");
+    pci_init();
+
     for(;;);
 }
 
