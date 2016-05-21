@@ -12,6 +12,27 @@
 #include <kernel/kernel_terminal.h>
 #include <kernel/kernel_thread.h>
 
+const char* PCI_CLASS_IDS[18] =
+{
+    "no class specification",
+    "Mass Storage Controller",
+    "Network Controller",
+    "Display Controller",
+    "Multimedia Device",
+    "Memory Controller",
+    "Bridge Device",
+    "Simple Communication Controller",
+    "Base System Peripheral",
+    "Input Device",
+    "Docking Station",
+    "Processor",
+    "Serial Bus Controller",
+    "Wireless Controller",
+    "Intelligent I/O Controller",
+    "Satellite Communication Controller",
+    "Encryption/Decryption Controller",
+    "Data Acquisition and Signal Processing Controller"
+};
 
 pci_device pci_devices[16];
 uint32_t devices = 0;

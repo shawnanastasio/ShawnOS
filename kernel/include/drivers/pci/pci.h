@@ -17,24 +17,4 @@ uint16_t pci_get_device_subclass_id(uint16_t bus, uint16_t slot, uint16_t func);
 void pci_probe();
 void pci_init();
 
-char* PCI_CLASS_IDS[] =
-{
-    "no class specification",
-    "Mass Storage Controller",
-    "Network Controller",
-    "Display Controller",
-    "Multimedia Device",
-    "Memory Controller",
-    "Bridge Device",
-    "Simple Communication Controller",
-    "Base System Peripheral",
-    "Input Device",
-    "Docking Station",
-    "Processor",
-    "Serial Bus Controller",
-    "Wireless Controller",
-    "Intelligent I/O Controller",
-    "Satellite Communication Controller",
-    "Encryption/Decryption Controller",
-    "Data Acquisition and Signal Processing Controller"
-};
+extern const char* PCI_CLASS_IDS[18];
