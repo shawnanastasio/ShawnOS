@@ -36,12 +36,12 @@
 extern void _i386_enter_pmode();
 
 
-void kernel_early(uint32_t mboot_magic, mboot_header_t *mboot_header) {
+void kernel_early(uint32_t mboot_magic, multiboot_info_t *mboot_header) {
     // Set up kernel terminal for early output
     //kernel_terminal_init(14);
 
     // Verify multiboot magic
-    if (mboot_magic != MULTIBOOT_EAX_MAGIC) {
+    if (mboot_magic != MULTIBOOT_BOOTLOADER_MAGIC) {
         printk_debug("Invalid Multiboot Magic!");
     }
 
@@ -66,14 +66,12 @@ void kernel_early(uint32_t mboot_magic, mboot_header_t *mboot_header) {
     };
     pit_install_scheduler_routine(kernel_task_pit_routine);
 
-
-
     __asm__ __volatile__ ("sti");
     printk_debug("Interrupts Enabled!");
 
     // Ensure multiboot header has memory information and parse
     if (mboot_header->flags & (1<<6)) { // Bit 6 signifies presence of mmap
-        kernel_mem_mmap_read((mboot_memmap_t *) mboot_header->mmap_addr);
+        kernel_mem_mmap_read(mboot_header->mmap_length, (multiboot_memory_map_t *) mboot_header->mmap_addr);
     }
 }
 
