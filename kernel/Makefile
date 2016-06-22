@@ -12,7 +12,7 @@ EXEC_PREFIX?=$(PREFIX)
 BOOTDIR?=$(EXEC_PREFIX)/boot
 INCLUDEDIR?=$(PREFIX)/include
 
-CFLAGS:=$(CFLAGS) -ffreestanding -fbuiltin -Wall -Wextra -Werror -fstack-protector-all
+CFLAGS:=$(CFLAGS) -ffreestanding -fbuiltin -Wall -Wextra -Werror -Wno-format -fstack-protector-all
 CPPFLAGS:=$(CPPFLAGS) -D__is_shawnos_kernel -Iinclude
 LDFLAGS:=$(LDFLAGS)
 LIBS:=$(LIBS) -nostdlib -lsk -lgcc
