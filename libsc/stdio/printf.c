@@ -2,6 +2,7 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
+#include <stdint.h>
 
 static void print(const char* data, size_t data_length)
 {
@@ -113,6 +114,48 @@ int printf(const char* restrict format, ...)
             int tmp;
             int start = 0;
             int end = size - 1;
+            while(start < end) {
+                tmp = buffer[start];
+                buffer[start] = buffer[end];
+                buffer[end] = tmp;
+                start++;
+                end--;
+            }
+
+            print(buffer, size);
+        }
+        else if ( *format == 'l' && *(format+1) == 'x')
+        {
+            format = format + 2;
+            int64_t d = (int) va_arg(parameters, int);
+            int64_t size = 0;
+            int64_t divisor = 16;
+            //Zero override
+            if(d == 0) {
+                char buffer[1];
+                buffer[0] = '0';
+                print(buffer, 1);
+            }
+
+            // deterine size!
+            int64_t temp = d;
+            while(temp) { ++size; temp /= 16; }
+            char buffer[size];
+
+            int64_t loop = 0;
+            do {
+                int64_t remainder = d % divisor;
+
+                buffer[loop++] = (remainder < 10) ? remainder + '0' : remainder + 'a' - 10;
+
+            } while (d /= divisor);
+
+            buffer[loop] = 0;
+
+            // reverse array
+            int64_t tmp;
+            int64_t start = 0;
+            int64_t end = size - 1;
             while(start < end) {
                 tmp = buffer[start];
                 buffer[start] = buffer[end];
