@@ -27,6 +27,6 @@ void kernel_mem_mmap_read(uint32_t mmap_length, multiboot_memory_map_t *mmap) {
         printf("entry_location: 0x%lx entry_size: 0x%lx addr: 0x%lx len: 0x%lx\n", cur_mmap_addr, current_entry->size, current_entry->addr, current_entry->len);
 
         // Increment by the size to get to the next entry
-        cur_mmap_addr += current_entry->size;
+        cur_mmap_addr += current_entry->size + sizeof(uintptr_t);
     }
 }
