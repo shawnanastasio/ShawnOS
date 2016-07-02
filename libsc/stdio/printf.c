@@ -85,9 +85,9 @@ int printf(const char* restrict format, ...)
         else if ( *format == 'x' )
         {
             format++;
-            int d = (int) va_arg(parameters, int);
-            int size = 0;
-            int divisor = 16;
+            uint32_t d = (uint32_t) va_arg(parameters, uint32_t);
+            uint32_t size = 0;
+            uint32_t divisor = 16;
             //Zero override
             if(d == 0) {
                 char buffer[1];
@@ -96,24 +96,24 @@ int printf(const char* restrict format, ...)
             }
 
             // deterine size!
-            int temp = d;
+            uint32_t temp = d;
             while(temp) { ++size; temp /= 16; }
             char buffer[size];
 
             int loop = 0;
             do {
-                int remainder = d % divisor;
+                uint32_t remainder = d % divisor;
 
-                buffer[loop++] = (remainder < 10) ? remainder + '0' : remainder + 'a' - 10;
+                buffer[loop++] = (char) ((remainder < 10) ? remainder + '0' : remainder + 'a' - 10);
 
             } while (d /= divisor);
 
             buffer[loop] = 0;
 
             // reverse array
-            int tmp;
-            int start = 0;
-            int end = size - 1;
+            char tmp;
+            char start = 0;
+            char end = size - 1;
             while(start < end) {
                 tmp = buffer[start];
                 buffer[start] = buffer[end];
@@ -127,9 +127,9 @@ int printf(const char* restrict format, ...)
         else if ( *format == 'l' && *(format+1) == 'x')
         {
             format = format + 2;
-            int64_t d = (int) va_arg(parameters, int);
-            int64_t size = 0;
-            int64_t divisor = 16;
+            uint64_t d = (uint64_t) va_arg(parameters, uint64_t);
+            uint64_t size = 0;
+            uint64_t divisor = 16;
             //Zero override
             if(d == 0) {
                 char buffer[1];
@@ -138,24 +138,24 @@ int printf(const char* restrict format, ...)
             }
 
             // deterine size!
-            int64_t temp = d;
+            uint64_t temp = d;
             while(temp) { ++size; temp /= 16; }
             char buffer[size];
 
-            int64_t loop = 0;
+            int loop = 0;
             do {
-                int64_t remainder = d % divisor;
+                uint64_t remainder = d % divisor;
 
-                buffer[loop++] = (remainder < 10) ? remainder + '0' : remainder + 'a' - 10;
+                buffer[loop++] = (char) ((remainder < 10) ? remainder + '0' : remainder + 'a' - 10);
 
             } while (d /= divisor);
 
             buffer[loop] = 0;
 
             // reverse array
-            int64_t tmp;
-            int64_t start = 0;
-            int64_t end = size - 1;
+            char tmp;
+            char start = 0;
+            char end = size - 1;
             while(start < end) {
                 tmp = buffer[start];
                 buffer[start] = buffer[end];
