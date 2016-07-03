@@ -33,6 +33,7 @@
 #include <arch/i386/irq.h>
 #include <arch/i386/multiboot.h>
 #include <arch/i386/io.h>
+#include <arch/i386/mem.h>
 extern void _i386_enter_pmode();
 
 
@@ -69,10 +70,7 @@ void kernel_early(uint32_t mboot_magic, multiboot_info_t *mboot_header) {
     __asm__ __volatile__ ("sti");
     printk_debug("Interrupts Enabled!");
 
-    // Ensure multiboot header has memory information and parse
-    if (mboot_header->flags & (1<<6)) { // Bit 6 signifies presence of mmap
-        kernel_mem_mmap_read(mboot_header->mmap_length, (multiboot_memory_map_t *) mboot_header->mmap_addr);
-    }
+    i386_mem_init(mboot_header);
 }
 
 void kernel_main() {
