@@ -8,6 +8,7 @@
 #include <drivers/pci/pci.h>
 #include <arch/i386/io.h>
 
+#include <kernel/kernel.h>
 #include <kernel/kernel_stdio.h>
 #include <kernel/kernel_terminal.h>
 #include <kernel/kernel_thread.h>
@@ -103,7 +104,7 @@ uint16_t pci_get_device_subclass_id(uint16_t bus, uint16_t slot, uint16_t func) 
  * Initialize PCI device array and such
  */
  void pci_init() {
-     printf("PCI scanning for PCI devices...\n");
+     printk_debug("Scanning for PCI devices.");
      devices = 0;
      pci_probe();
  }
