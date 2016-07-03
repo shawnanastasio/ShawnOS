@@ -118,8 +118,8 @@ void _fault_handler(struct regs *r) {
     vga_textmode_writestring("\n");
     vga_textmode_writestring(exception_messages[r->int_no]);
     vga_textmode_writestring("\n\nStack Dump:\n");
-    printf("EIP: %d\n", (int)r->eip);
-    printf("ESP: %d\n", (int)r->esp);
+    printf("EIP: 0x%x\n", r->eip);
+    printf("ESP: 0x%x\n", r->esp);
     printf("Error Code: %d\n", (int)r->err_code);
     printf("\nHALT\n");
     abort();
