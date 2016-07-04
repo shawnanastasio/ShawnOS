@@ -55,10 +55,13 @@ void kernel_early(uint32_t mboot_magic, multiboot_info_t *mboot_header) {
     printk_debug("Protected mode entered!");
     idt_install();
     printk_debug("IDT Installed!");
+    i386_mem_init(mboot_header);
+    printk_debug("Memory Allocation functions enabled!");
 
     // Install drivers
     pit_timer_install_irq(); // Install PIT driver
-    pckbd_install_irq(&pckbd_us_qwerty); // Install US PS/2 Driver
+    pckbd_install_irq(&pckbd_us_qwerty); // Install US PS/2 driver
+    pci_init(); // Install PCI driver
 
     // Add kernel task to PIT
     struct pit_routine kernel_task_pit_routine = {
@@ -69,8 +72,6 @@ void kernel_early(uint32_t mboot_magic, multiboot_info_t *mboot_header) {
 
     __asm__ __volatile__ ("sti");
     printk_debug("Interrupts Enabled!");
-
-    i386_mem_init(mboot_header);
 }
 
 void kernel_main() {
@@ -84,7 +85,14 @@ void kernel_main() {
     vga_textmode_setcolor(make_color(COLOR_LIGHT_GREY, COLOR_BLACK));
     vga_textmode_writestring("!\n\n");
 
-    pci_init();
+    uint32_t frame_num, frame_addr;
+    for(;;) {
+        frame_num = kernel_mem_allocate_frame();
+        frame_addr = kernel_mem_get_frame_start_addr(frame_num);
+        if (frame_num == 0) break;
+        printf("[mem] num: %d, start: 0x%x\n", frame_num, frame_addr);
+        pit_timer_wait_ms(800);
+    }
 
     for(;;);
 }

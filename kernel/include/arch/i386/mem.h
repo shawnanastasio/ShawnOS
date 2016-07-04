@@ -1,6 +1,11 @@
+#pragma once
+
 #include <stdint.h>
 #include <arch/i386/multiboot.h>
 
 void i386_mem_init(multiboot_info_t *mboot_header);
-void _i386_mmap_read(uint32_t mmap_length, multiboot_memory_map_t *mmap);
-void _i386_elf_sections_read(multiboot_elf_section_header_table_t *elf_sec);
+uint32_t i386_mem_allocate_frame();
+uint32_t i386_mem_get_frame_start_addr(uint32_t num);
+uint32_t i386_mem_get_frame_num(uint32_t addr);
+uint32_t _i386_mmap_read(uint32_t num, uint8_t mode);
+void _i386_elf_sections_read();
