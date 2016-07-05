@@ -111,7 +111,7 @@ void vga_textmode_scroll() {
                 vga_textmode_buffer[index] = vga_textmode_buffer[nextrow_index];
         }
     }
-    vga_textmode_row = VGA_HEIGHT;
+    vga_textmode_row = VGA_HEIGHT-1;
     vga_textmode_column = 0;
 }
 
@@ -134,7 +134,7 @@ void vga_textmode_putchar(char c) {
     }
   }
 
-  if (vga_textmode_row == VGA_HEIGHT+1) {
+  if (vga_textmode_row == VGA_HEIGHT) {
     //Scroll if all rows are taken up
     //vga_textmode_row = 0;
     vga_textmode_scroll();
