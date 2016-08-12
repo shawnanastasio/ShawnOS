@@ -243,7 +243,7 @@ uint32_t i386_mem_kmalloc(uint32_t size) {
             // too
             uint32_t i, temp;
             bool valid = true;
-            for (i=start; i<end; i++) {
+            for (i=start + 1; i<=end; i++) {
                 // Ensure that this frame isn't reserved
                 mem_counter = i;
                 temp = i386_mem_peek_frame(&mem_counter);
