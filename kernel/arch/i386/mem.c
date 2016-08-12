@@ -59,6 +59,7 @@ void i386_mem_init(multiboot_info_t *mboot_header) {
     kernel_mem_info.get_frame_start_addr = &i386_mem_get_frame_start_addr;
     kernel_mem_info.get_frame_num = &i386_mem_get_frame_num;
     kernel_mem_info.allocate_frame = &i386_mem_allocate_frame;
+    kernel_mem_info.kmalloc = &i386_mem_kmalloc;
 
     return;
 multiboot_info_fail:
@@ -70,32 +71,70 @@ multiboot_info_fail:
  * Allocate the next free frame and return the address it starts at
  * Returns frame number
  */
- uint32_t i386_mem_allocate_frame() {
-     uint32_t addr = _i386_mmap_read(info.next_free_frame, 0);
+uint32_t i386_mem_allocate_frame() {
+    uint32_t addr = _i386_mmap_read(info.next_free_frame, 0);
 
-     // Check if all memory is allocated
-     if (addr == 0) {
-         printk_debug("Out of memory!");
-         return 0;
-     }
+    // Check if all memory is allocated
+    if (addr == 0) {
+        printk_debug("Out of memory!");
+        return 0;
+    }
 
-     // Check that frame is not in reserved area
-     // If it is, recursively call back with an incremented frame number
-     if (addr >= info.kernel_reserved_start && addr <= info.kernel_reserved_end) {
-         info.next_free_frame++;
-         return i386_mem_allocate_frame();
-     } else if (addr >= info.multiboot_reserved_start && addr <= info.multiboot_reserved_end) {
-         info.next_free_frame++;
-         return i386_mem_allocate_frame();
-     }
+    // Check that frame is not in reserved area
+    // If it is, recursively call back with an incremented frame number
+    if (addr >= info.kernel_reserved_start && addr <= info.kernel_reserved_end) {
+        info.next_free_frame++;
+        return i386_mem_allocate_frame();
+    } else if (addr >= info.multiboot_reserved_start && addr <= info.multiboot_reserved_end) {
+        info.next_free_frame++;
+        return i386_mem_allocate_frame();
+    }
 
-     // Update info.next_free_frame to reflect the latest frame.
-     // We can't just increment by one because we may have skipped over multiple
-     // chunks in reserved memory.
-     uint32_t frame_num = i386_mem_get_frame_num(addr);
-     info.next_free_frame = frame_num + 1;
-     return frame_num;
- }
+    // Update info.next_free_frame to reflect the latest frame.
+    // We can't just increment by one because we may have skipped over multiple
+    // chunks in reserved memory.
+    uint32_t frame_num = i386_mem_get_frame_num(addr);
+    info.next_free_frame = frame_num + 1;
+    return frame_num;
+}
+
+/**
+ * Return the address of the next free frame
+ */
+uint32_t i386_mem_get_next_frame() {
+    return info.next_free_frame;
+}
+
+/**
+ * Return the address of the next available frame after `counter`
+ * Functions like i386_mem_allocate_frame, but doesn't increase internal frame
+ * or allocate frame
+ */
+uint32_t i386_mem_peek_frame(uint32_t *counter) {
+    uint32_t addr = _i386_mmap_read(*counter, 0);
+
+    // Check if all memory is allocated
+    if (addr == 0) {
+        return 0;
+    }
+
+    // Check that frame is not in reserved area
+    // If it is, recursively call back with an incremented frame number
+    if (addr >= info.kernel_reserved_start && addr <= info.kernel_reserved_end) {
+        (*counter)++;
+        return i386_mem_peek_frame(counter);
+    } else if (addr >= info.multiboot_reserved_start && addr <= info.multiboot_reserved_end) {
+        (*counter)++;
+        return i386_mem_peek_frame(counter);
+    }
+
+    // Update info.next_free_frame to reflect the latest frame.
+    // We can't just increment by one because we may have skipped over multiple
+    // chunks in reserved memory.
+    uint32_t frame_num = i386_mem_get_frame_num(addr);
+    *counter = frame_num + 1;
+    return frame_num;
+}
 
 /**
  * Return frame start address for a given frame number, based on multiboot memory map.
@@ -130,18 +169,6 @@ uint32_t _i386_mmap_read(uint32_t request, uint8_t mode) {
     uint32_t cur_num = 0;
     while (cur_mmap_addr < mmap_end_addr) {
         multiboot_memory_map_t *current_entry = (multiboot_memory_map_t *)cur_mmap_addr;
-
-        // Skip entry if memory is reserved
-        /*
-        if (current_entry->type == MULTIBOOT_MEMORY_RESERVED) {
-            // Increment cur_num
-            //cur_num += (current_entry->len)/PAGE_SIZE;
-            printf("adding: %d\n", (current_entry->len)/PAGE_SIZE);
-
-            cur_mmap_addr += current_entry->size + sizeof(uintptr_t);
-            continue;
-        }
-        */
 
         // Print out information for this entry
         //printf("[mem] addr: 0x%lx len: 0x%lx\n", current_entry->addr, current_entry->len);
@@ -189,4 +216,55 @@ void _i386_elf_sections_read() {
     // Update local data to reflect reserved memory areas
     info.kernel_reserved_start = (cur_header + 1)->sh_addr;
     info.kernel_reserved_end = (cur_header + (info.elf_sec->num) - 1)->sh_addr;
+}
+
+/**
+ * Allocate a continuous block of raw memory
+ * @param size in bytes of block
+ * @return starting address of block
+ */
+uint32_t i386_mem_kmalloc(uint32_t size) {
+    // Determine number of pages we'll need to allocate to cover this size
+    uint32_t frames = size / PAGE_SIZE;
+    if (size % PAGE_SIZE != 0) ++frames;
+
+    // Scan through frames until a continuous block of memory is found
+    uint32_t mem_counter = 1;
+    uint32_t start, end, target_frame;
+    for (;;) {
+        start = i386_mem_peek_frame(&mem_counter);
+        // Fast forward `frames` frames and see if we're in the same block
+        target_frame = start + frames - 1;
+        end = i386_mem_peek_frame(&target_frame);
+
+        if (end - start + 1 == frames) {
+            // We have a block that starts and ends on available memory,
+            // however, we must make sure all frames in between are available
+            // too
+            uint32_t i, temp;
+            bool valid = true;
+            for (i=start; i<end; i++) {
+                // Ensure that this frame isn't reserved
+                mem_counter = i;
+                temp = i386_mem_peek_frame(&mem_counter);
+                if (temp != i) {
+                    // Frame is reserved, scrap block
+                    valid = false;
+                    break;
+                }
+            }
+            if (valid) {
+                return kernel_mem_get_frame_start_addr(start);
+            } else {
+                // We didn't find a continuous block, start looking again at
+                // the first reserved frame
+                mem_counter = temp;
+            }
+        } else {
+            // We didn't find a continuous block, start looking again at `end`
+            mem_counter = end;
+        }
+    }
+    // No continuous chunks that big found
+    return 0;
 }
