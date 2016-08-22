@@ -9,7 +9,6 @@
 
 #include <kernel/kernel.h>
 #include <kernel/kernel_thread.h>
-#include <kernel/mem/kernel_mem.h>
 
 #include <arch/i386/multiboot.h>
 #include <arch/i386/elf.h>
@@ -25,6 +24,9 @@ struct {
     uint32_t kernel_reserved_end;
     uint32_t multiboot_reserved_start;
     uint32_t multiboot_reserved_end;
+    uint32_t kernel_heap_start;
+    uint32_t kernel_heap_end;
+    uint32_t kernel_heap_curpos;
 } info;
 
 /**
@@ -54,12 +56,15 @@ void i386_mem_init(multiboot_info_t *mboot_header) {
     // Parse ELF sections
     _i386_elf_sections_read();
 
-    // Populate kernel_mem data struct with relevant variable and function pointers
-    kernel_mem_info.next_free_frame = &info.next_free_frame;
-    kernel_mem_info.get_frame_start_addr = &i386_mem_get_frame_start_addr;
-    kernel_mem_info.get_frame_num = &i386_mem_get_frame_num;
-    kernel_mem_info.allocate_frame = &i386_mem_allocate_frame;
-    kernel_mem_info.kmalloc = &i386_mem_kmalloc;
+    // Find block of memory to use as kernel heap
+    info.kernel_heap_start = i386_mem_find_heap(KERNEL_HEAP_SIZE);
+    // Check if heap was not found and handle accordingly
+    if (info.kernel_heap_start == 0) {
+        printf("Insufficient memory on device!\n");
+        abort();
+    }
+    info.kernel_heap_curpos = info.kernel_heap_start;
+    info.kernel_heap_end = info.kernel_heap_start + KERNEL_HEAP_SIZE;
 
     return;
 multiboot_info_fail:
@@ -82,10 +87,7 @@ uint32_t i386_mem_allocate_frame() {
 
     // Check that frame is not in reserved area
     // If it is, recursively call back with an incremented frame number
-    if (addr >= info.kernel_reserved_start && addr <= info.kernel_reserved_end) {
-        info.next_free_frame++;
-        return i386_mem_allocate_frame();
-    } else if (addr >= info.multiboot_reserved_start && addr <= info.multiboot_reserved_end) {
+    if (i386_mem_check_reserved(addr) == true) {
         info.next_free_frame++;
         return i386_mem_allocate_frame();
     }
@@ -120,10 +122,7 @@ uint32_t i386_mem_peek_frame(uint32_t *counter) {
 
     // Check that frame is not in reserved area
     // If it is, recursively call back with an incremented frame number
-    if (addr >= info.kernel_reserved_start && addr <= info.kernel_reserved_end) {
-        (*counter)++;
-        return i386_mem_peek_frame(counter);
-    } else if (addr >= info.multiboot_reserved_start && addr <= info.multiboot_reserved_end) {
+    if (i386_mem_check_reserved(addr) == true) {
         (*counter)++;
         return i386_mem_peek_frame(counter);
     }
@@ -176,7 +175,7 @@ uint32_t _i386_mmap_read(uint32_t request, uint8_t mode) {
         // Split this entry into PAGE_SIZE sized chunks and iterate through
         uint64_t i;
         uint64_t current_entry_end = current_entry->addr + current_entry->len;
-        for (i=current_entry->addr; i + PAGE_SIZE <= current_entry_end; i += PAGE_SIZE) {
+        for (i=current_entry->addr; i + PAGE_SIZE - 1 <= current_entry_end; i += PAGE_SIZE) {
             if (mode == 1 && request >= i && request <= i+PAGE_SIZE) {
                 return cur_num+1; // Return frame number
             }
@@ -219,11 +218,12 @@ void _i386_elf_sections_read() {
 }
 
 /**
- * Allocate a continuous block of raw memory
- * @param size in bytes of block
- * @return starting address of block
+ * Find a continuous block of memory with size `size` to be used as kernel heap
+ * Memory is page aligned.
+ * @param size in bytes of heap
+ * @return starting address of heap
  */
-uint32_t i386_mem_kmalloc(uint32_t size) {
+uint32_t i386_mem_find_heap(uint32_t size) {
     // Determine number of pages we'll need to allocate to cover this size
     uint32_t frames = size / PAGE_SIZE;
     if (size % PAGE_SIZE != 0) ++frames;
@@ -242,19 +242,21 @@ uint32_t i386_mem_kmalloc(uint32_t size) {
             // however, we must make sure all frames in between are available
             // too
             uint32_t i, temp;
-            bool valid = true;
-            for (i=start + 1; i<=end; i++) {
+            bool reserved = false, valid = true;
+            for (i=start + 1; i<end; i++) {
                 // Ensure that this frame isn't reserved
                 mem_counter = i;
                 temp = i386_mem_peek_frame(&mem_counter);
-                if (temp != i) {
+                reserved = i386_mem_check_reserved(
+                            i386_mem_get_frame_start_addr(temp));
+                if (temp != i || reserved == true) {
                     // Frame is reserved, scrap block
                     valid = false;
                     break;
                 }
             }
             if (valid) {
-                return kernel_mem_get_frame_start_addr(start);
+                return i386_mem_get_frame_start_addr(start);
             } else {
                 // We didn't find a continuous block, start looking again at
                 // the first reserved frame
@@ -267,4 +269,88 @@ uint32_t i386_mem_kmalloc(uint32_t size) {
     }
     // No continuous chunks that big found
     return 0;
+}
+
+/**
+ * Checks if specified memory address `addr` is in any reserved memory
+ * @return true if memory is reserved, otherwise false
+ */
+bool i386_mem_check_reserved(uint32_t addr) {
+    bool reserved = false;
+
+    // Check that memory doesn't overlap with kernel binary
+    if (addr >= info.kernel_reserved_start && addr <= info.kernel_reserved_end) {
+        reserved = true;
+    }
+    // Check that memory doesn't overlap with multiboot information structure
+    else if (addr >= info.multiboot_reserved_start && addr <= info.multiboot_reserved_end) {
+        reserved = true;
+    }
+
+    return reserved;
+}
+
+/**
+ * Internal function to allocate memory from the kernel heap. Should not be called
+ * directly.
+ *
+ * @param size size of memory to allocate
+ * @param align whether or not to align memory to page bounds
+ * @param physical address of allocated memory
+ */
+uintptr_t i386_mem_kmalloc_real(uint32_t size, bool align, uintptr_t *phys) {
+    // Align address if requested
+    if (align == true && (info.kernel_heap_curpos & (0x100000000 - PAGE_SIZE))) {
+        // The address is not already aligned, so we must do it ourselves
+        info.kernel_heap_curpos &= 0x100000000 - PAGE_SIZE;
+        info.kernel_heap_curpos += PAGE_SIZE;
+    }
+    if (phys != NULL) {
+        // If a physical address pointer is provided to us, update it
+        *phys = (uintptr_t)info.kernel_heap_curpos;
+    }
+    // Increase the current position past the allocated memory
+    uint32_t allocated_memory_start = info.kernel_heap_curpos;
+    info.kernel_heap_curpos += size;
+    return allocated_memory_start;
+}
+
+/**
+ * Allocate a standard chunk of memory in the kernel heap
+ *
+ * @param size size of memory to allocate
+ */
+uintptr_t i386_mem_kmalloc(uint32_t size) {
+    return i386_mem_kmalloc_real(size, false, NULL);
+}
+
+/**
+ * Allocate a page-aligned chunk of memory in the kernel heap
+ *
+ * @param size size of memory to allocate
+ */
+uintptr_t i386_mem_kmalloc_a(uint32_t size) {
+    return i386_mem_kmalloc_real(size, true, NULL);
+}
+
+/**
+ * Allocate a standard chunk of memory in the kernel heap and return
+ * the physical address that it is located at
+ *
+ * @param size size of memory to allocate
+ * @param phys pointer to uintptr_t to store physical address at
+ */
+uintptr_t i386_mem_kmalloc_p(uint32_t size, uintptr_t *phys) {
+    return i386_mem_kmalloc_real(size, false, phys);
+}
+
+/**
+ * Allocate a page-aligned chunk of memory in the kernel heap and return
+ * the physical address that it is located at
+ *
+ * @param size size of memory to allocate
+ * @param phys pointer to uintptr_t to store physical address at
+ */
+uintptr_t i386_mem_kmalloc_ap(uint32_t size, uintptr_t *phys) {
+    return i386_mem_kmalloc_real(size, true, phys);
 }

@@ -82,6 +82,36 @@ int printf(const char* restrict format, ...)
 
             print(buffer, size);
         }
+        else if ( *format == 'u' )
+        {
+            format++;
+            uint32_t d = (uint32_t) va_arg(parameters, uint32_t);
+            uint32_t size = 0;
+
+            //Zero override
+            if (d==0) {
+                char buffer[1];
+                buffer[0] = '0';
+                print(buffer, 1);
+            }
+
+            /* Determine size of buffer */
+            uint32_t temp = d;
+            while(temp) { ++size; temp /= 10; }
+            //if (temp == 0) {size = 1;}
+            char buffer[size];
+
+
+            /* Get each individual digit and add to buffer as char*/
+            uint32_t i;
+            for(i=0; d; i++)
+            {
+                buffer[size-i-1] = (d % 10) + '0';
+                d /= 10;
+            }
+
+            print(buffer, size);
+        }
         else if ( *format == 'x' )
         {
             format++;

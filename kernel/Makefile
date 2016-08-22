@@ -25,7 +25,6 @@ include drivers/vga/make.config
 include drivers/pci/make.config
 #include drivers/sata/make.config
 include $(ARCHDIR)/make.config
-include kernel/mem/make.config
 include kernel/make.config
 
 CFLAGS:=$(CFLAGS) $(KERNEL_ARCH_CFLAGS)

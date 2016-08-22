@@ -15,7 +15,7 @@
 #include <kernel/kernel_thread.h>
 #include <kernel/kernel_stdio.h>
 #include <kernel/kernel_terminal.h>
-#include <kernel/mem/kernel_mem.h>
+#include <kernel/kernel_mem.h>
 
 /* Driver includes */
 #include <drivers/vga/textmode.h>
@@ -85,20 +85,11 @@ void kernel_main() {
     vga_textmode_setcolor(make_color(COLOR_LIGHT_GREY, COLOR_BLACK));
     vga_textmode_writestring("!\n\n");
 
-    uint32_t chunk = kernel_mem_kmalloc(61441);
-    printf("Got chunk size 61440 at 0x%x\n", chunk);
+    uint32_t tmp2 = kmalloc_a(100);
+    printf("100 page-aligned bytes allocated at: 0x%x\n", tmp2);
 
-    // DEBUG: Dump the first 16 frames
-    uint32_t mem_counter = 1;
-    uint32_t frame_num, frame_addr;
-    uint32_t i;
-    for(i=0; i<16; i++) {
-        frame_num = i386_mem_peek_frame(&mem_counter);
-        frame_addr = i386_mem_get_frame_start_addr(frame_num);
-        if (frame_num == 0) break;
-        printf("[mem] count: %d, num: %d, start: 0x%x\n", mem_counter, frame_num, frame_addr);
-        //pit_timer_wait_ms(800);
-    }
+    uint32_t tmp = kmalloc(100);
+    printf("100 bytes allocated at: 0x%x\n", tmp);
 
     for(;;);
 }
