@@ -300,7 +300,7 @@ bool i386_mem_check_reserved(uint32_t addr) {
  */
 uintptr_t i386_mem_kmalloc_real(uint32_t size, bool align, uintptr_t *phys) {
     // Align address if requested
-    if (align == true && (info.kernel_heap_curpos & (0x100000000 - PAGE_SIZE))) {
+    if (align == true && (info.kernel_heap_curpos % PAGE_SIZE != 0)) {
         // The address is not already aligned, so we must do it ourselves
         info.kernel_heap_curpos &= 0x100000000 - PAGE_SIZE;
         info.kernel_heap_curpos += PAGE_SIZE;
