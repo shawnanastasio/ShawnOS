@@ -7,6 +7,7 @@
 
 // i386 memory aliases
 // TODO: Conditionally include these based on preprocessor definitions
+#include <arch/i386/mem.h>
 #define kmalloc_real(...) i386_mem_kmalloc_real(__VA_ARGS__)
 #define kmalloc(...) i386_mem_kmalloc(__VA_ARGS__)
 #define kmalloc_a(...) i386_mem_kmalloc_a(__VA_ARGS__)
