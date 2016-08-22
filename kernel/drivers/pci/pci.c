@@ -35,8 +35,8 @@ const char* PCI_CLASS_IDS[18] =
     "Data Acquisition and Signal Processing Controller"
 };
 
-pci_device pci_devices[16];
-uint32_t devices = 0;
+pci_device_t pci_devices[16];
+uint32_t pci_devices_size = 0;
 
 /**
  * Read word at offset from pci device at bus `bus`, device `slot`, and function `func` (for multifunc device)
@@ -103,38 +103,36 @@ uint16_t pci_get_device_subclass_id(uint16_t bus, uint16_t slot, uint16_t func) 
 /**
  * Initialize PCI device array and such
  */
- void pci_init() {
-     printk_debug("Scanning for PCI devices.");
-     devices = 0;
-     pci_probe();
- }
+void pci_init() {
+    printk_debug("Scanning for PCI devices.");
+    pci_probe();
+}
 
- /**
-  * Loop through PCI devices and print out information for the first 16 devices
-  */
- void pci_probe() {
-     for(uint16_t bus = 0; bus < 256; bus++) {
-         for (uint16_t slot = 0; slot < 32; slot++) {
-             for(uint16_t function = 0; function < 8; function++) {
+/**
+ * Loop through PCI devices and print out information for the first 16 devices
+ */
+void pci_probe() {
+    for(uint16_t bus = 0; bus < 256; bus++) {
+        for (uint16_t slot = 0; slot < 32; slot++) {
+            for(uint16_t function = 0; function < 8; function++) {
+                if(pci_devices_size > 15) {
+                    printf("[pci] not adding above device... limit reached\n");
+                    return;
+                }
 
-                 uint16_t vendor_id = pci_get_vendor_id(bus, slot, function);
-                 if(vendor_id == 0xFFFF) continue;
-                 uint16_t device_id = pci_get_device_id(bus, slot, function);
-                 uint16_t class_id = pci_get_device_class_id(bus, slot, function);
-                 printf("[pci] %x:%x - %s\n", vendor_id, device_id, PCI_CLASS_IDS[class_id]);
+                uint16_t vendor_id = pci_get_vendor_id(bus, slot, function);
+                if(vendor_id == 0xFFFF) continue;
+                uint16_t device_id = pci_get_device_id(bus, slot, function);
+                uint16_t class_id = pci_get_device_class_id(bus, slot, function);
+                printf("[pci] %x:%x - %s\n", vendor_id, device_id, PCI_CLASS_IDS[class_id]);
 
-                 if(devices > 15) {
-                     printf("[pci] not adding above device... limit reached\n");
-                     continue;
-                 }
-                 pci_device pcidev;
-                 pcidev.vendor = vendor_id;
-                 pcidev.device = device_id;
-                 pcidev.func = function;
+                // Add current device to local pci_devices array
+                pci_devices[pci_devices_size].vendor = vendor_id;
+                pci_devices[pci_devices_size].device = device_id;
+                pci_devices[pci_devices_size].func = function;
 
-                 pci_devices[devices] = pcidev;
-                 devices++;
-             }
-         }
-     }
- }
+                ++pci_devices_size;
+            }
+        }
+    }
+}
