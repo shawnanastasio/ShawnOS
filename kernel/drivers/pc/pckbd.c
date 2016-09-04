@@ -21,7 +21,7 @@ bool pckbd_is_capital = false;
 bool pckbd_is_shift = false;
 
 
-void pckbd_irq_input_handler(struct regs *r) {
+void pckbd_irq_input_handler(i386_registers_t *r) {
     if ((r->int_no-32) != 1) {
         printf("ERROR: this routine needs to be triggered from IRQ 1\n");
         abort();

@@ -37,7 +37,7 @@ void *irq_routines[16] =
     0, 0, 0, 0, 0, 0, 0, 0
 };
 
-void irq_install_handler(int32_t irq, void (*handler)(struct regs *r)) {
+void irq_install_handler(int32_t irq, void (*handler)(i386_registers_t *r)) {
     irq_routines[irq] = handler;
 }
 
@@ -93,8 +93,8 @@ void _irq_install() {
 *  interrupt at BOTH controllers, otherwise, you only send
 *  an EOI command to the first controller. If you don't send
 *  an EOI, you won't raise any more IRQs */
-void _irq_handler(struct regs *r) {
-    void (*handler)(struct regs *r);
+void _irq_handler(i386_registers_t *r) {
+    void (*handler)(i386_registers_t *r);
 
     handler = irq_routines[r->int_no - 32];
     if (handler) {

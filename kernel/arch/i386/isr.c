@@ -111,7 +111,7 @@ const char *exception_messages[] =
   "Exception: INTEL RESERVED EXCEPTION"
 };
 
-void _fault_handler(struct regs *r) {
+void _fault_handler(i386_registers_t *r) {
   if (r->int_no < 32) {
     //TODO: Replace printing with syscalls or something
     vga_textmode_setcolor(COLOR_RED);

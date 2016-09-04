@@ -62,7 +62,7 @@ void pit_set_timer_phase(int16_t hz) {
 volatile uint32_t pit_total_timer_ticks = 0;
 
 // IRQ routine to handle PIT tick
-void pit_irq_timer_handler(struct regs *r) {
+void pit_irq_timer_handler(i386_registers_t *r) {
     if ((r->int_no-32) != 0) {
         printf("ERROR: this routine needs to be triggered from IRQ 0\n");
         abort();
