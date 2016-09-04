@@ -299,11 +299,17 @@ bool i386_mem_check_reserved(uint32_t addr) {
  * @param physical address of allocated memory
  */
 uintptr_t i386_mem_kmalloc_real(uint32_t size, bool align, uintptr_t *phys) {
-    // Align address if requested
+    // Page-align address if requested
     if (align == true && (info.kernel_heap_curpos % PAGE_SIZE != 0)) {
         // The address is not already aligned, so we must do it ourselves
         info.kernel_heap_curpos &= 0x100000000 - PAGE_SIZE;
         info.kernel_heap_curpos += PAGE_SIZE;
+    }
+    // If page-alignment isn't requested, make the address 8-byte aligned.
+    // 8-byte is chosen as a common value that doesn't clash with most C datatypes'
+    // natural alignments
+    else if (align == false && (info.kernel_heap_curpos % 0x8 != 0)) {
+        info.kernel_heap_curpos += info.kernel_heap_curpos % 0x8;
     }
     if (phys != NULL) {
         // If a physical address pointer is provided to us, update it
