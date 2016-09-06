@@ -73,8 +73,8 @@ void pit_irq_timer_handler(i386_registers_t *r) {
     // Check if we have to trigger any pit routines
     int i;
     for (i=0; i<_pit_routines_size; i++) {
-        if (pit_total_timer_ticks % ((PIT_TIMER_CONSTANT/10000) *
-            _pit_routines[i].hz) == 0) //If this pit routine is to be triggered
+        if (pit_total_timer_ticks %
+            _pit_routines[i].hz == 0) //If this pit routine is to be triggered
         {
             void (*__current_routine)(void);
             __current_routine = _pit_routines[i].func;
@@ -96,12 +96,16 @@ uint32_t pit_get_total_ticks() {
 
 // Wait specified number of seconds
 void pit_timer_wait(uint32_t seconds) {
-  uint32_t desired_ticks = pit_total_timer_ticks + (seconds * PIT_TIMER_CONSTANT);
-  while (desired_ticks > pit_total_timer_ticks);
+    uint32_t desired_ticks = pit_total_timer_ticks + (seconds * PIT_TIMER_CONSTANT);
+    while (desired_ticks > pit_total_timer_ticks) {
+        __asm__ __volatile__ ("sti//hlt//cli");
+    }
 }
 
 // Wait specified number of milliseconds
 void pit_timer_wait_ms(uint32_t ms) {
-  uint32_t desired_ticks = pit_total_timer_ticks + (ms * (PIT_TIMER_CONSTANT/1000));
-  while (desired_ticks > pit_total_timer_ticks);
+    uint32_t desired_ticks = pit_total_timer_ticks + (ms * (PIT_TIMER_CONSTANT/1000));
+    while (desired_ticks > pit_total_timer_ticks) {
+        __asm__ __volatile__ ("sti//hlt//cli");
+    }
 }
