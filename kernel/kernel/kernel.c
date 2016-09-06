@@ -51,8 +51,6 @@ void kernel_early(uint32_t mboot_magic, multiboot_info_t *mboot_header) {
 
     gdt_install();
     printk_debug("GDT Installed!");
-    _i386_enter_pmode();
-    printk_debug("Protected mode entered!");
     idt_install();
     printk_debug("IDT Installed!");
     i386_mem_init(mboot_header);
@@ -65,10 +63,12 @@ void kernel_early(uint32_t mboot_magic, multiboot_info_t *mboot_header) {
 
     // Add kernel task to PIT
     struct pit_routine kernel_task_pit_routine = {
-        10000, // Call kernel_task every second
+        PIT_TIMER_CONSTANT, // Call kernel_task every second
         kernel_task
     };
     pit_install_scheduler_routine(kernel_task_pit_routine);
+
+    _i386_print_reserved();
 
     __asm__ __volatile__ ("sti");
     printk_debug("Interrupts Enabled!");
@@ -85,11 +85,15 @@ void kernel_main() {
     vga_textmode_setcolor(make_color(COLOR_LIGHT_GREY, COLOR_BLACK));
     vga_textmode_writestring("!\n\n");
 
-    uint32_t tmp2 = kmalloc_a(100);
-    printf("100 page-aligned bytes allocated at: 0x%x\n", tmp2);
+    uint32_t i;
+    for (i=0; true; i++) {
+        uint32_t real_frame_num = i386_mem_allocate_frame();
+        uint32_t real_frame_addr = i386_mem_get_frame_start_addr(real_frame_num);
+        uint32_t ret_frame_num = i386_mem_get_frame_num(real_frame_addr);
+        printf("[mem] frame #%u or #%u, 0x%x\n", real_frame_num, ret_frame_num, real_frame_addr);
 
-    uint32_t tmp = kmalloc(100);
-    printf("100 bytes allocated at: 0x%x\n", tmp);
+        pit_timer_wait(1);
+    }
 
     for(;;);
 }

@@ -27,6 +27,9 @@ struct {
     uint32_t kernel_heap_start;
     uint32_t kernel_heap_end;
     uint32_t kernel_heap_curpos;
+    uint32_t mem_lower;
+    uint32_t mem_upper;
+    uint32_t highest_free_address;
 } info;
 
 /**
@@ -56,6 +59,9 @@ void i386_mem_init(multiboot_info_t *mboot_header) {
     // Parse ELF sections
     _i386_elf_sections_read();
 
+    // Find the highest free address
+    info.highest_free_address = _i386_mmap_get_highest_addr();
+
     // Find block of memory to use as kernel heap
     info.kernel_heap_start = i386_mem_find_heap(KERNEL_HEAP_SIZE);
     // Check if heap was not found and handle accordingly
@@ -66,6 +72,11 @@ void i386_mem_init(multiboot_info_t *mboot_header) {
     info.kernel_heap_curpos = info.kernel_heap_start;
     info.kernel_heap_end = info.kernel_heap_start + KERNEL_HEAP_SIZE;
 
+    info.mem_lower = mboot_header->mem_lower;
+    info.mem_upper = mboot_header->mem_upper;
+
+
+    printf("heap at 0x%x\n", info.kernel_heap_start);
     return;
 multiboot_info_fail:
     printf("Multiboot information structure does not contain required sections!\n");
@@ -73,31 +84,32 @@ multiboot_info_fail:
 }
 
 /**
- * Allocate the next free frame and return the address it starts at
+ * Allocate the next free frame and return its nu
  * Returns frame number
  */
 uint32_t i386_mem_allocate_frame() {
-    uint32_t addr = _i386_mmap_read(info.next_free_frame, 0);
+    // Get address of next free frame
+    uint32_t addr = info.next_free_frame * PAGE_SIZE;
 
-    // Check if all memory is allocated
-    if (addr == 0) {
+    // Check if we've hit the end of available memory
+    if (addr + PAGE_SIZE > info.highest_free_address) {
         printk_debug("Out of memory!");
         return 0;
     }
 
-    // Check that frame is not in reserved area
-    // If it is, recursively call back with an incremented frame number
-    if (i386_mem_check_reserved(addr) == true) {
+    // Check if the frame lies within reserved memory
+    uint8_t reserved = i386_mem_check_reserved(addr);
+    if (reserved == MEM_RESERVED) {
+        printf("Reserved frame detected!!\n");
+        // If it is, increment the frame number and recursively call back
         info.next_free_frame++;
         return i386_mem_allocate_frame();
     }
 
-    // Update info.next_free_frame to reflect the latest frame.
-    // We can't just increment by one because we may have skipped over multiple
-    // chunks in reserved memory.
-    uint32_t frame_num = i386_mem_get_frame_num(addr);
-    info.next_free_frame = frame_num + 1;
-    return frame_num;
+    // Frame is good, increment the next_free_frame and return this frame
+    uint32_t temp = info.next_free_frame;
+    info.next_free_frame++;
+    return temp;
 }
 
 /**
@@ -113,26 +125,27 @@ uint32_t i386_mem_get_next_frame() {
  * or allocate frame
  */
 uint32_t i386_mem_peek_frame(uint32_t *counter) {
-    uint32_t addr = _i386_mmap_read(*counter, 0);
+    // Get address of next free frame
+    uint32_t addr = (*counter) * PAGE_SIZE;
 
-    // Check if all memory is allocated
-    if (addr == 0) {
+    // Check if we've hit the end of available memory
+    if (addr + PAGE_SIZE > info.highest_free_address) {
         return 0;
     }
 
-    // Check that frame is not in reserved area
-    // If it is, recursively call back with an incremented frame number
-    if (i386_mem_check_reserved(addr) == true) {
+    // Check if the frame lies within reserved memory
+    uint8_t reserved = i386_mem_check_reserved(addr);
+    if (reserved == MEM_RESERVED) {
+        printf("Reserved frame detected!!\n");
+        // If it is, increment the frame number and recursively call back
         (*counter)++;
         return i386_mem_peek_frame(counter);
     }
 
-    // Update info.next_free_frame to reflect the latest frame.
-    // We can't just increment by one because we may have skipped over multiple
-    // chunks in reserved memory.
-    uint32_t frame_num = i386_mem_get_frame_num(addr);
-    *counter = frame_num + 1;
-    return frame_num;
+    // Frame is good, increment the next_free_frame and return this frame
+    uint32_t temp = *counter;
+    (*counter)++;
+    return temp;
 }
 
 /**
@@ -140,65 +153,116 @@ uint32_t i386_mem_peek_frame(uint32_t *counter) {
  */
 uint32_t i386_mem_get_frame_start_addr(uint32_t num) {
     // Get requested frame
-    return _i386_mmap_read(num, 0);
+    //return _i386_mmap_read(num, 0);
+    return num*PAGE_SIZE;
 }
 
 /**
  * Return frame number for a given address, based on multiboot memory map
  */
- uint32_t i386_mem_get_frame_num(uint32_t addr) {
-     return _i386_mmap_read(addr, 1);
- }
+uint32_t i386_mem_get_frame_num(uint32_t addr) {
+    //return _i386_mmap_read(addr, 1);
+    return addr/PAGE_SIZE;
+}
 
 /**
- * Read multiboot memory map and return the start address of chunk `num`
- * NOTE: The very first chunk is ignored/reserved for kernel.
- * `mode` = 0 - Find chunk from num and return address
- * `mode` = 1 - Find chunk from address and return num (DEBUG)
+ * Checks if the frame at a given address is reserved in the memory map
+ * @param  addr address of frame to check
+ * @return reserved status
  */
-uint32_t _i386_mmap_read(uint32_t request, uint8_t mode) {
-    //printk_debug("Parsing multiboot memory map.");
-
-    // Skip requests for 0 or invalid mode
-    if (request == 0 || (mode != 0 && mode != 1)) return 0;
-
-    // Increment through each entry in the multiboot memory map
+uint8_t _i386_mmap_check_reserved(uint32_t addr) {
     uintptr_t cur_mmap_addr = (uintptr_t)info.mmap;
     uintptr_t mmap_end_addr = cur_mmap_addr + info.mmap_length;
-    uint32_t cur_num = 0;
+
+    // Loop through memory map entries until the one for the requested addr is found
     while (cur_mmap_addr < mmap_end_addr) {
         multiboot_memory_map_t *current_entry = (multiboot_memory_map_t *)cur_mmap_addr;
 
-        // Print out information for this entry
-        //printf("[mem] addr: 0x%lx len: 0x%lx\n", current_entry->addr, current_entry->len);
+        // Check if requested addr falls within the bounds of this entry
+        uint32_t current_entry_end = current_entry->addr + current_entry->len;
 
-        // Split this entry into PAGE_SIZE sized chunks and iterate through
-        uint64_t i;
-        uint64_t current_entry_end = current_entry->addr + current_entry->len;
-        for (i=current_entry->addr; i + PAGE_SIZE - 1 <= current_entry_end; i += PAGE_SIZE) {
-            if (mode == 1 && request >= i && request <= i+PAGE_SIZE) {
-                return cur_num+1; // Return frame number
-            }
+        if (addr >= current_entry->addr && addr <= current_entry_end) {
+            //printf("[mem] 0x%x found after 0x%x\n", addr, current_entry->addr);
+            // Check if the entry marks this address as reserved
             if (current_entry->type == MULTIBOOT_MEMORY_RESERVED) {
-                // If the requested chunk is in reserved space, increase it until it is in non-reserved space
-                if (mode == 0 && cur_num == request) {
-                    ++request;
+                return MEM_RESERVED; // Memory is reserved
+            } else {
+                // Check if a page would fit within this entry at this address
+                // If it doesn't, it means that part of the page falls within
+                // reserved memory.
+                if (addr + PAGE_SIZE > current_entry_end) {
+                    return MEM_RESERVED;
+                } else {
+                    return MEM_FREE; // Memory is not reserved
                 }
-                // Skip to next chunk
-                ++cur_num;
-                continue;
-            } else if (mode == 0 && cur_num == request) {
-                return i; // Return start address
             }
-            ++cur_num;
         }
 
-        // Increment by the size to get to the next entry
         cur_mmap_addr += current_entry->size + sizeof(uintptr_t);
     }
 
-    // If no results are found, return 0
-    return 0;
+    // If the memory address was not found in the multiboot memory map, return
+    // false.
+    printk_debug("Requested address not found in memory map!");
+    printf("Requested addr was 0x%x\n", addr);
+    return MEM_NONEXISTANT;
+}
+
+/**
+ * Debug function to print out reserved memory regions to the screen
+ */
+void _i386_print_reserved() {
+    // Print out mem_lower and mem_upper
+    printf("[mem] mem_lower: %u, mem_upper: %u, mem_total: %u\n",
+            info.mem_lower, info.mem_upper, info.mem_lower + info.mem_upper);
+    // Print out mmap
+    uintptr_t cur_mmap_addr = (uintptr_t)info.mmap;
+    uintptr_t mmap_end_addr = cur_mmap_addr + info.mmap_length;
+
+    // Loop through memory map and print entries
+    while (cur_mmap_addr < mmap_end_addr) {
+        multiboot_memory_map_t *current_entry = (multiboot_memory_map_t *)cur_mmap_addr;
+
+        printf("[mem] addr: 0x%lx len: 0x%lx reserved: %u\n", current_entry->addr,
+                current_entry->len, current_entry->type);
+
+        cur_mmap_addr += current_entry->size + sizeof(uintptr_t);
+    }
+
+    // Print out ELF
+    printf("[mem] elf reserved start: 0x%x end: 0x%x\n",
+            info.kernel_reserved_start, info.kernel_reserved_end);
+
+    // Print out mboot reserved
+    printf("[mem] mboot reserved start: 0x%x end: 0x%x\n",
+            info.multiboot_reserved_start, info.multiboot_reserved_end);
+}
+
+/**
+ * Finds the highest non-reserved address in the memory map and returns it
+ * @return highest non-reserved memory address
+ */
+
+uint32_t _i386_mmap_get_highest_addr() {
+    uintptr_t cur_mmap_addr = (uintptr_t)info.mmap;
+    uintptr_t mmap_end_addr = cur_mmap_addr + info.mmap_length;
+
+    uint32_t highest = 0;
+
+    // Loop through memory map and print entries
+    while (cur_mmap_addr < mmap_end_addr) {
+        multiboot_memory_map_t *current_entry = (multiboot_memory_map_t *)cur_mmap_addr;
+
+        if (current_entry->type == MULTIBOOT_MEMORY_AVAILABLE) {
+            if (current_entry->size + current_entry->len > highest) {
+                highest = current_entry->size + current_entry->len;
+            }
+        }
+
+        cur_mmap_addr += current_entry->size + sizeof(uintptr_t);
+    }
+
+    return highest;
 }
 
 /**
@@ -237,19 +301,18 @@ uint32_t i386_mem_find_heap(uint32_t size) {
         target_frame = start + frames - 1;
         end = i386_mem_peek_frame(&target_frame);
 
+        printf("end: %u, start: %u, frames: %u\n", end, start, frames);
         if (end - start + 1 == frames) {
             // We have a block that starts and ends on available memory,
             // however, we must make sure all frames in between are available
             // too
             uint32_t i, temp;
-            bool reserved = false, valid = true;
+            bool valid = true;
             for (i=start + 1; i<end; i++) {
                 // Ensure that this frame isn't reserved
                 mem_counter = i;
                 temp = i386_mem_peek_frame(&mem_counter);
-                reserved = i386_mem_check_reserved(
-                            i386_mem_get_frame_start_addr(temp));
-                if (temp != i || reserved == true) {
+                if (temp != i) {
                     // Frame is reserved, scrap block
                     valid = false;
                     break;
@@ -272,22 +335,33 @@ uint32_t i386_mem_find_heap(uint32_t size) {
 }
 
 /**
- * Checks if specified memory address `addr` is in any reserved memory
+ * Checks if the frame at memory address `addr` is in any reserved memory
  * @return true if memory is reserved, otherwise false
  */
-bool i386_mem_check_reserved(uint32_t addr) {
-    bool reserved = false;
+uint8_t i386_mem_check_reserved(uint32_t addr) {
+    // End of the page that starts at addr
+    uint32_t addr_end = addr + PAGE_SIZE;
 
     // Check that memory doesn't overlap with kernel binary
-    if (addr >= info.kernel_reserved_start && addr <= info.kernel_reserved_end) {
-        reserved = true;
-    }
-    // Check that memory doesn't overlap with multiboot information structure
-    else if (addr >= info.multiboot_reserved_start && addr <= info.multiboot_reserved_end) {
-        reserved = true;
+    if ((addr >= info.kernel_reserved_start && addr <= info.kernel_reserved_end) ||
+        (addr_end >= info.kernel_reserved_start && addr_end <= info.kernel_reserved_end)) {
+        return MEM_RESERVED;
     }
 
-    return reserved;
+    // Check that memory doesn't overlap with multiboot information structure
+    if ((addr >= info.multiboot_reserved_start && addr <= info.multiboot_reserved_end) ||
+        (addr_end >= info.multiboot_reserved_start && addr_end <=info.multiboot_reserved_end)) {
+        return MEM_RESERVED;
+    }
+
+    // Check that the memory isn't marked as reserved in the memory map
+    uint8_t mmap_reserved = _i386_mmap_check_reserved(addr);
+    if (mmap_reserved != MEM_FREE) {
+        return mmap_reserved;
+    }
+
+    // If we got here, it means the memory is not reserved
+    return MEM_FREE;
 }
 
 /**
