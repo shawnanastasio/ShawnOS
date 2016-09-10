@@ -14,6 +14,9 @@
 #include <arch/i386/elf.h>
 #include <arch/i386/mem.h>
 
+// Global pointer to a bitset containing reserved frames
+uint32_t *i386_mem_frame_bitset;
+
 struct {
     uint32_t next_free_frame;
     multiboot_info_t *mboot_header;
@@ -73,9 +76,6 @@ void i386_mem_init(multiboot_info_t *mboot_header) {
     }
     info.kernel_heap_curpos = info.kernel_heap_start;
     info.kernel_heap_end = info.kernel_heap_start + KERNEL_HEAP_SIZE;
-
-    info.mem_lower = mboot_header->mem_lower;
-    info.mem_upper = mboot_header->mem_upper;
 
     return;
 multiboot_info_fail:
