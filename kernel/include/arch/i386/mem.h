@@ -35,4 +35,3 @@ uintptr_t i386_mem_kmalloc_p(uint32_t size, uintptr_t *phys);
 uintptr_t i386_mem_kmalloc_ap(uint32_t size, uintptr_t *phys);
 uint8_t _i386_mmap_check_reserved(uint32_t addr);
 void _i386_print_reserved();
-uint32_t _i386_mmap_get_highest_addr();

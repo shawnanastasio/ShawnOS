@@ -55,12 +55,14 @@ void i386_mem_init(multiboot_info_t *mboot_header) {
     info.elf_sec = &(mboot_header->u.elf_sec);
     info.multiboot_reserved_start = (uint32_t)mboot_header;
     info.multiboot_reserved_end = (uint32_t)(mboot_header + sizeof(multiboot_info_t));
+    info.mem_upper = mboot_header->mem_upper;
+    info.mem_lower = mboot_header->mem_lower;
 
     // Parse ELF sections
     _i386_elf_sections_read();
 
     // Find the highest free address
-    info.highest_free_address = _i386_mmap_get_highest_addr();
+    info.highest_free_address = info.mem_upper * 1024;
 
     // Find block of memory to use as kernel heap
     info.kernel_heap_start = i386_mem_find_heap(KERNEL_HEAP_SIZE);
@@ -75,8 +77,6 @@ void i386_mem_init(multiboot_info_t *mboot_header) {
     info.mem_lower = mboot_header->mem_lower;
     info.mem_upper = mboot_header->mem_upper;
 
-
-    printf("heap at 0x%x\n", info.kernel_heap_start);
     return;
 multiboot_info_fail:
     printf("Multiboot information structure does not contain required sections!\n");
@@ -239,33 +239,6 @@ void _i386_print_reserved() {
 }
 
 /**
- * Finds the highest non-reserved address in the memory map and returns it
- * @return highest non-reserved memory address
- */
-
-uint32_t _i386_mmap_get_highest_addr() {
-    uintptr_t cur_mmap_addr = (uintptr_t)info.mmap;
-    uintptr_t mmap_end_addr = cur_mmap_addr + info.mmap_length;
-
-    uint32_t highest = 0;
-
-    // Loop through memory map and print entries
-    while (cur_mmap_addr < mmap_end_addr) {
-        multiboot_memory_map_t *current_entry = (multiboot_memory_map_t *)cur_mmap_addr;
-
-        if (current_entry->type == MULTIBOOT_MEMORY_AVAILABLE) {
-            if (current_entry->size + current_entry->len > highest) {
-                highest = current_entry->size + current_entry->len;
-            }
-        }
-
-        cur_mmap_addr += current_entry->size + sizeof(uintptr_t);
-    }
-
-    return highest;
-}
-
-/**
  * Read ELF32 section headers and determine kernel reserved memory
  */
 void _i386_elf_sections_read() {
@@ -301,7 +274,7 @@ uint32_t i386_mem_find_heap(uint32_t size) {
         target_frame = start + frames - 1;
         end = i386_mem_peek_frame(&target_frame);
 
-        printf("end: %u, start: %u, frames: %u\n", end, start, frames);
+        //printf("end: %u, start: %u, frames: %u\n", end, start, frames);
         if (end - start + 1 == frames) {
             // We have a block that starts and ends on available memory,
             // however, we must make sure all frames in between are available
