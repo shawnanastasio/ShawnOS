@@ -1,5 +1,6 @@
 /**
- * Architecture-specific memory allocation functions
+ * @file
+ * @brief Architecture-specific memory allocation functions
  */
 #include <stdint.h>
 #include <stdio.h>
@@ -8,32 +9,19 @@
 #include <stdbool.h>
 
 #include <kernel/kernel.h>
+#include <kernel/kernel_mem.h>
 #include <kernel/kernel_thread.h>
+#include <kernel/bitset.h>
 
 #include <arch/i386/multiboot.h>
 #include <arch/i386/elf.h>
 #include <arch/i386/mem.h>
+#include <arch/i386/paging.h>
 
 // Global pointer to a bitset containing reserved frames
 uint32_t *i386_mem_frame_bitset;
 
-struct {
-    uint32_t next_free_frame;
-    multiboot_info_t *mboot_header;
-    uint32_t mmap_length;
-    multiboot_memory_map_t *mmap;
-    multiboot_elf_section_header_table_t *elf_sec;
-    uint32_t kernel_reserved_start;
-    uint32_t kernel_reserved_end;
-    uint32_t multiboot_reserved_start;
-    uint32_t multiboot_reserved_end;
-    uint32_t kernel_heap_start;
-    uint32_t kernel_heap_end;
-    uint32_t kernel_heap_curpos;
-    uint32_t mem_lower;
-    uint32_t mem_upper;
-    uint32_t highest_free_address;
-} info;
+i386_mem_info_t meminfo;
 
 /**
  * Initalize free memory and pass information to kernel_mem frame allocator
@@ -51,31 +39,39 @@ void i386_mem_init(multiboot_info_t *mboot_header) {
     }
 
     // Fill local data structure with verified information
-    info.next_free_frame = 1;
-    info.mboot_header = mboot_header;
-    info.mmap_length = mboot_header->mmap_length;
-    info.mmap = (multiboot_memory_map_t *) mboot_header->mmap_addr;
-    info.elf_sec = &(mboot_header->u.elf_sec);
-    info.multiboot_reserved_start = (uint32_t)mboot_header;
-    info.multiboot_reserved_end = (uint32_t)(mboot_header + sizeof(multiboot_info_t));
-    info.mem_upper = mboot_header->mem_upper;
-    info.mem_lower = mboot_header->mem_lower;
+    meminfo.mboot_header = mboot_header;
+    meminfo.mmap_length = mboot_header->mmap_length;
+    meminfo.mmap = (multiboot_memory_map_t *) mboot_header->mmap_addr;
+    meminfo.elf_sec = &(mboot_header->u.elf_sec);
+    meminfo.multiboot_reserved_start = (uint32_t)mboot_header;
+    meminfo.multiboot_reserved_end = (uint32_t)(mboot_header + sizeof(multiboot_info_t));
+    meminfo.mem_upper = mboot_header->mem_upper;
+    meminfo.mem_lower = mboot_header->mem_lower;
 
     // Parse ELF sections
     _i386_elf_sections_read();
 
     // Find the highest free address
-    info.highest_free_address = info.mem_upper * 1024;
+    meminfo.highest_free_address = meminfo.mem_upper * 1024;
+
+    // Set the kernel heap size to the amount of memory required for the frame bitmap
+    //meminfo.kernel_heap_size = meminfo.highest_free_address/PAGE_SIZE;
+    meminfo.kernel_heap_size = 0x30000;
 
     // Find block of memory to use as kernel heap
-    info.kernel_heap_start = i386_mem_find_heap(KERNEL_HEAP_SIZE);
+    meminfo.kernel_heap_start = i386_mem_find_heap(meminfo.kernel_heap_size);
     // Check if heap was not found and handle accordingly
-    if (info.kernel_heap_start == 0) {
+    if (meminfo.kernel_heap_start == 0) {
         printf("Insufficient memory on device!\n");
         abort();
     }
-    info.kernel_heap_curpos = info.kernel_heap_start;
-    info.kernel_heap_end = info.kernel_heap_start + KERNEL_HEAP_SIZE;
+    meminfo.kernel_heap_curpos = meminfo.kernel_heap_start;
+    meminfo.kernel_heap_end = meminfo.kernel_heap_start + meminfo.kernel_heap_size;
+
+    // Allocate required memory for mem frame bitset and mark reserved frames
+    i386_mem_frame_bitset = (uint32_t *)kmalloc_a(meminfo.highest_free_address/PAGE_SIZE);
+    memset((void *)i386_mem_frame_bitset, 0, meminfo.highest_free_address/PAGE_SIZE);
+    _i386_mem_init_bitset();
 
     return;
 multiboot_info_fail:
@@ -84,65 +80,101 @@ multiboot_info_fail:
 }
 
 /**
- * Allocate the next free frame and return its nu
- * Returns frame number
+ * Initialize the bitset containing reserved frames
  */
-uint32_t i386_mem_allocate_frame() {
-    // Get address of next free frame
-    uint32_t addr = info.next_free_frame * PAGE_SIZE;
+void _i386_mem_init_bitset() {
+    uint32_t i;
 
-    // Check if we've hit the end of available memory
-    if (addr + PAGE_SIZE > info.highest_free_address) {
-        printk_debug("Out of memory!");
-        return 0;
+    // Iterate through memory and mark reserved frames in bitset
+    for (i = 0x0000; i + PAGE_SIZE < meminfo.highest_free_address; i += PAGE_SIZE) {
+        // Check if the current address is reserved
+        if (i386_mem_check_reserved(i) == MEM_RESERVED) {
+            // Mark frame as reserved in the bitset
+            bitset_set_bit(i386_mem_frame_bitset, i / PAGE_SIZE);
+        }
     }
 
-    // Check if the frame lies within reserved memory
-    uint8_t reserved = i386_mem_check_reserved(addr);
-    if (reserved == MEM_RESERVED) {
-        printf("Reserved frame detected!!\n");
-        // If it is, increment the frame number and recursively call back
-        info.next_free_frame++;
-        return i386_mem_allocate_frame();
+    // Mark kernel heap memory as reserved
+    uint32_t start = (uint32_t)(meminfo.kernel_heap_start / PAGE_SIZE);
+    uint32_t end = (uint32_t)(meminfo.kernel_heap_end / PAGE_SIZE);
+    for (i=start; i<=end; i++) {
+        bitset_set_bit(i386_mem_frame_bitset, i);
     }
-
-    // Frame is good, increment the next_free_frame and return this frame
-    uint32_t temp = info.next_free_frame;
-    info.next_free_frame++;
-    return temp;
 }
 
 /**
- * Return the address of the next free frame
+ * Allocates a frame and returns it's index
+ * @return index of allocated frame
  */
-uint32_t i386_mem_get_next_frame() {
-    return info.next_free_frame;
+inline uint32_t i386_mem_allocate_frame() {
+    uint32_t next_free_frame = i386_mem_get_next_free_frame();
+    if (next_free_frame) {
+        bitset_set_bit(i386_mem_frame_bitset, next_free_frame);
+    }
+    return next_free_frame;
 }
 
 /**
- * Return the address of the next available frame after `counter`
- * Functions like i386_mem_allocate_frame, but doesn't increase internal frame
- * or allocate frame
+ * Frees a frame
+ * @param frame index of frame to free
+ */
+inline void i386_mem_free_frame(uint32_t frame) {
+    bitset_clear_bit(i386_mem_frame_bitset, frame);
+}
+
+/**
+ * Get the frame number of the next available frame
+ * @return frame number
+ */
+uint32_t i386_mem_get_next_free_frame() {
+    uint32_t i, j;
+
+    // Loop through bitset until a free frame is found
+    for (i=0; i < INDEX_FROM_BIT(meminfo.highest_free_address/PAGE_SIZE); i++) {
+        // Skip this entry if it is full
+        if (i386_mem_frame_bitset[i] == 0xFFFFFFFF) continue;
+        //printf("Current Entry: 0x%x\n", i386_mem_frame_bitset[i]);
+
+        // Check if this entry has a free frame
+        for (j=0; j < 32; j++) {
+            if (!(i386_mem_frame_bitset[i] & (1 << j))) {
+                // This frame is free, return it
+                //printf("FRAME #%u is free, returning!\n", i * 32 + j);
+                //printf("bitwise result: %u\n", i386_mem_frame_bitset[i] & (1 < j));
+                return i * 32 + j;
+            }
+        }
+    }
+
+    // No free frames were found
+    printk_debug("Out of memory!");
+    return 0;
+}
+
+/**
+ * Find the first free frame at or after the provided counter
+ * Provided for legacy support with previous memory function implementations
+ * @param  counter pointer to the counter to use
+ * @return         frame number
  */
 uint32_t i386_mem_peek_frame(uint32_t *counter) {
     // Get address of next free frame
     uint32_t addr = (*counter) * PAGE_SIZE;
 
     // Check if we've hit the end of available memory
-    if (addr + PAGE_SIZE > info.highest_free_address) {
+    if (addr + PAGE_SIZE > meminfo.highest_free_address) {
         return 0;
     }
 
     // Check if the frame lies within reserved memory
     uint8_t reserved = i386_mem_check_reserved(addr);
     if (reserved == MEM_RESERVED) {
-        printf("Reserved frame detected!!\n");
         // If it is, increment the frame number and recursively call back
         (*counter)++;
         return i386_mem_peek_frame(counter);
     }
 
-    // Frame is good, increment the next_free_frame and return this frame
+    // Frame is good, increment the counter and return this frame
     uint32_t temp = *counter;
     (*counter)++;
     return temp;
@@ -171,8 +203,8 @@ uint32_t i386_mem_get_frame_num(uint32_t addr) {
  * @return reserved status
  */
 uint8_t _i386_mmap_check_reserved(uint32_t addr) {
-    uintptr_t cur_mmap_addr = (uintptr_t)info.mmap;
-    uintptr_t mmap_end_addr = cur_mmap_addr + info.mmap_length;
+    uintptr_t cur_mmap_addr = (uintptr_t)meminfo.mmap;
+    uintptr_t mmap_end_addr = cur_mmap_addr + meminfo.mmap_length;
 
     // Loop through memory map entries until the one for the requested addr is found
     while (cur_mmap_addr < mmap_end_addr) {
@@ -203,8 +235,8 @@ uint8_t _i386_mmap_check_reserved(uint32_t addr) {
 
     // If the memory address was not found in the multiboot memory map, return
     // false.
-    printk_debug("Requested address not found in memory map!");
-    printf("Requested addr was 0x%x\n", addr);
+    //printk_debug("Requested address not found in memory map!");
+    //printf("Requested addr was 0x%x\n", addr);
     return MEM_NONEXISTANT;
 }
 
@@ -214,10 +246,10 @@ uint8_t _i386_mmap_check_reserved(uint32_t addr) {
 void _i386_print_reserved() {
     // Print out mem_lower and mem_upper
     printf("[mem] mem_lower: %u, mem_upper: %u, mem_total: %u\n",
-            info.mem_lower, info.mem_upper, info.mem_lower + info.mem_upper);
+            meminfo.mem_lower, meminfo.mem_upper, meminfo.mem_lower + meminfo.mem_upper);
     // Print out mmap
-    uintptr_t cur_mmap_addr = (uintptr_t)info.mmap;
-    uintptr_t mmap_end_addr = cur_mmap_addr + info.mmap_length;
+    uintptr_t cur_mmap_addr = (uintptr_t)meminfo.mmap;
+    uintptr_t mmap_end_addr = cur_mmap_addr + meminfo.mmap_length;
 
     // Loop through memory map and print entries
     while (cur_mmap_addr < mmap_end_addr) {
@@ -231,11 +263,11 @@ void _i386_print_reserved() {
 
     // Print out ELF
     printf("[mem] elf reserved start: 0x%x end: 0x%x\n",
-            info.kernel_reserved_start, info.kernel_reserved_end);
+            meminfo.kernel_reserved_start, meminfo.kernel_reserved_end);
 
     // Print out mboot reserved
     printf("[mem] mboot reserved start: 0x%x end: 0x%x\n",
-            info.multiboot_reserved_start, info.multiboot_reserved_end);
+            meminfo.multiboot_reserved_start, meminfo.multiboot_reserved_end);
 }
 
 /**
@@ -243,15 +275,15 @@ void _i386_print_reserved() {
  */
 void _i386_elf_sections_read() {
     // Get first section headers
-    elf_section_header_t *cur_header = (elf_section_header_t *)info.elf_sec->addr;
+    elf_section_header_t *cur_header = (elf_section_header_t *)meminfo.elf_sec->addr;
 
     // Print initial information about ELF section header availability
     //printf("[elf] First ELF section header at 0x%x, num_sections: 0x%x, size: 0x%x\n",
-    //       info.elf_sec->addr, info.elf_sec->num, info.elf_sec->size);
+    //       meminfo.elf_sec->addr, meminfo.elf_sec->num, meminfo.elf_sec->size);
 
     // Update local data to reflect reserved memory areas
-    info.kernel_reserved_start = (cur_header + 1)->sh_addr;
-    info.kernel_reserved_end = (cur_header + (info.elf_sec->num) - 1)->sh_addr;
+    meminfo.kernel_reserved_start = (cur_header + 1)->sh_addr;
+    meminfo.kernel_reserved_end = (cur_header + (meminfo.elf_sec->num) - 1)->sh_addr;
 }
 
 /**
@@ -315,15 +347,18 @@ uint8_t i386_mem_check_reserved(uint32_t addr) {
     // End of the page that starts at addr
     uint32_t addr_end = addr + PAGE_SIZE;
 
+    // Below 0x1000 is always reserved
+    if (addr_end <= 0x1000) return MEM_RESERVED;
+
     // Check that memory doesn't overlap with kernel binary
-    if ((addr >= info.kernel_reserved_start && addr <= info.kernel_reserved_end) ||
-        (addr_end >= info.kernel_reserved_start && addr_end <= info.kernel_reserved_end)) {
+    if ((addr >= meminfo.kernel_reserved_start && addr <= meminfo.kernel_reserved_end) ||
+        (addr_end >= meminfo.kernel_reserved_start && addr_end <= meminfo.kernel_reserved_end)) {
         return MEM_RESERVED;
     }
 
     // Check that memory doesn't overlap with multiboot information structure
-    if ((addr >= info.multiboot_reserved_start && addr <= info.multiboot_reserved_end) ||
-        (addr_end >= info.multiboot_reserved_start && addr_end <=info.multiboot_reserved_end)) {
+    if ((addr >= meminfo.multiboot_reserved_start && addr <= meminfo.multiboot_reserved_end) ||
+        (addr_end >= meminfo.multiboot_reserved_start && addr_end <=meminfo.multiboot_reserved_end)) {
         return MEM_RESERVED;
     }
 
@@ -347,24 +382,24 @@ uint8_t i386_mem_check_reserved(uint32_t addr) {
  */
 uintptr_t i386_mem_kmalloc_real(uint32_t size, bool align, uintptr_t *phys) {
     // Page-align address if requested
-    if (align == true && (info.kernel_heap_curpos % PAGE_SIZE != 0)) {
+    if (align == true && (meminfo.kernel_heap_curpos % PAGE_SIZE != 0)) {
         // The address is not already aligned, so we must do it ourselves
-        info.kernel_heap_curpos &= 0x100000000 - PAGE_SIZE;
-        info.kernel_heap_curpos += PAGE_SIZE;
+        meminfo.kernel_heap_curpos &= 0x100000000 - PAGE_SIZE;
+        meminfo.kernel_heap_curpos += PAGE_SIZE;
     }
     // If page-alignment isn't requested, make the address 8-byte aligned.
     // 8-byte is chosen as a common value that doesn't clash with most C datatypes'
     // natural alignments
-    else if (align == false && (info.kernel_heap_curpos % 0x8 != 0)) {
-        info.kernel_heap_curpos += info.kernel_heap_curpos % 0x8;
+    else if (align == false && (meminfo.kernel_heap_curpos % 0x8 != 0)) {
+        meminfo.kernel_heap_curpos += meminfo.kernel_heap_curpos % 0x8;
     }
     if (phys != NULL) {
         // If a physical address pointer is provided to us, update it
-        *phys = (uintptr_t)info.kernel_heap_curpos;
+        *phys = (uintptr_t)meminfo.kernel_heap_curpos;
     }
     // Increase the current position past the allocated memory
-    uint32_t allocated_memory_start = info.kernel_heap_curpos;
-    info.kernel_heap_curpos += size;
+    uint32_t allocated_memory_start = meminfo.kernel_heap_curpos;
+    meminfo.kernel_heap_curpos += size;
     return allocated_memory_start;
 }
 
@@ -373,7 +408,7 @@ uintptr_t i386_mem_kmalloc_real(uint32_t size, bool align, uintptr_t *phys) {
  *
  * @param size size of memory to allocate
  */
-uintptr_t i386_mem_kmalloc(uint32_t size) {
+inline uintptr_t i386_mem_kmalloc(uint32_t size) {
     return i386_mem_kmalloc_real(size, false, NULL);
 }
 
@@ -382,7 +417,7 @@ uintptr_t i386_mem_kmalloc(uint32_t size) {
  *
  * @param size size of memory to allocate
  */
-uintptr_t i386_mem_kmalloc_a(uint32_t size) {
+inline uintptr_t i386_mem_kmalloc_a(uint32_t size) {
     return i386_mem_kmalloc_real(size, true, NULL);
 }
 
@@ -393,7 +428,7 @@ uintptr_t i386_mem_kmalloc_a(uint32_t size) {
  * @param size size of memory to allocate
  * @param phys pointer to uintptr_t to store physical address at
  */
-uintptr_t i386_mem_kmalloc_p(uint32_t size, uintptr_t *phys) {
+inline uintptr_t i386_mem_kmalloc_p(uint32_t size, uintptr_t *phys) {
     return i386_mem_kmalloc_real(size, false, phys);
 }
 
@@ -404,6 +439,6 @@ uintptr_t i386_mem_kmalloc_p(uint32_t size, uintptr_t *phys) {
  * @param size size of memory to allocate
  * @param phys pointer to uintptr_t to store physical address at
  */
-uintptr_t i386_mem_kmalloc_ap(uint32_t size, uintptr_t *phys) {
+inline uintptr_t i386_mem_kmalloc_ap(uint32_t size, uintptr_t *phys) {
     return i386_mem_kmalloc_real(size, true, phys);
 }

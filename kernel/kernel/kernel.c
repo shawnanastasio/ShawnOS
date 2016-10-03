@@ -16,6 +16,7 @@
 #include <kernel/kernel_stdio.h>
 #include <kernel/kernel_terminal.h>
 #include <kernel/kernel_mem.h>
+#include <kernel/bitset.h>
 
 /* Driver includes */
 #include <drivers/vga/textmode.h>
@@ -34,8 +35,7 @@
 #include <arch/i386/multiboot.h>
 #include <arch/i386/io.h>
 #include <arch/i386/mem.h>
-extern void _i386_enter_pmode();
-
+#include <arch/i386/paging.h>
 
 void kernel_early(uint32_t mboot_magic, multiboot_info_t *mboot_header) {
     // Set up kernel terminal for early output
@@ -55,11 +55,13 @@ void kernel_early(uint32_t mboot_magic, multiboot_info_t *mboot_header) {
     printk_debug("IDT Installed!");
     i386_mem_init(mboot_header);
     printk_debug("Memory Allocation functions enabled!");
+    i386_paging_init();
+    printk_debug("Paging enabled!");
 
     // Install drivers
     pit_timer_install_irq(); // Install PIT driver
     pckbd_install_irq(&pckbd_us_qwerty); // Install US PS/2 driver
-    pci_init(); // Install PCI driver
+    //pci_init(); // Install PCI driver
 
     // Add kernel task to PIT
     struct pit_routine kernel_task_pit_routine = {
@@ -85,15 +87,10 @@ void kernel_main() {
     vga_textmode_setcolor(make_color(COLOR_LIGHT_GREY, COLOR_BLACK));
     vga_textmode_writestring("!\n\n");
 
-    uint32_t i;
-    for (i=0; true; i++) {
-        uint32_t real_frame_num = i386_mem_allocate_frame();
-        uint32_t real_frame_addr = i386_mem_get_frame_start_addr(real_frame_num);
-        uint32_t ret_frame_num = i386_mem_get_frame_num(real_frame_addr);
-        printf("[mem] frame #%u or #%u, 0x%x\n", real_frame_num, ret_frame_num, real_frame_addr);
-
-        pit_timer_wait(1);
-    }
+    i386_allocate_page(0xA0000000, PT_PRESENT | PT_RW, PD_PRESENT | PD_RW);
+    uint32_t *kek = (uint32_t *)0xA0000000;
+    printf("kek: %d\n", *kek);
+    i386_allocate_page(0x10001001, PT_PRESENT | PT_RW, PD_PRESENT | PD_RW);
 
     for(;;);
 }
