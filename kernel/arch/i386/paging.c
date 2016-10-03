@@ -4,13 +4,17 @@
 
 #include <stdint.h>
 #include <stdio.h>
+#include <stdbool.h>
+#include <stdlib.h>
 
 #include <kernel/kernel_mem.h>
 #include <kernel/bitset.h>
 #include <arch/i386/mem.h>
+#include <arch/i386/isr.h>
 
 extern void load_page_dir(uint32_t *);
 extern void enable_paging();
+extern uint32_t get_faulting_address();
 
 // Page Directory containing an array of pointers to page tables
 // Passed directly to load_page_dir
@@ -37,6 +41,9 @@ void i386_paging_init() {
         i386_identity_map_page(i, PT_PRESENT | PT_RW, PD_PRESENT | PD_RW);
     }
 
+    // Install page fault handler
+    isr_install_handler(14, __i386_page_fault_handler);
+
     // Enable paging
     load_page_dir(i386_page_directory);
     enable_paging();
@@ -46,7 +53,7 @@ void i386_paging_init() {
  * Allocate a page at the specified address. Will overwrite any current page.
  * @param address virtual address that corresponds to page to allocate
  * @param pt_flags page table entry flags to be used
- * @param pd_flags page directory entry flags to be used if the page directory does not exist
+ * @param pd_flags page directory entry flags to be used if the page directory entry does not exist
  * @return the created page table entry
  */
 uint32_t i386_allocate_page(uint32_t address, uint32_t pt_flags, uint32_t pd_flags) {
@@ -63,7 +70,7 @@ uint32_t i386_allocate_page(uint32_t address, uint32_t pt_flags, uint32_t pd_fla
 
     // Check if the page directory contains this table, and add it if not
     if ((i386_page_directory[table_index] & PD_PRESENT) == 0) {
-        printf("Adding PD entry at table_index: %u\n", table_index);
+        //printf("Adding PD entry at table_index: %u\n", table_index);
         i386_page_directory[table_index] = ((uint32_t)page_table_list[table_index].addr) | pd_flags;
     }
 
@@ -71,10 +78,38 @@ uint32_t i386_allocate_page(uint32_t address, uint32_t pt_flags, uint32_t pd_fla
 }
 
 /**
+ * Free the page at the specified address and it's corresponding frame.
+ * @param  address virtual address that corresponds to page to free
+ * @return 0 if operation failed, 1 if operation succeeded
+ */
+uint8_t i386_free_page(uint32_t address) {
+    uint32_t page_index = address / 0x1000;
+    uint32_t table_index = page_index / 1024;
+    uint32_t page_index_in_table = page_index % 1024;
+    uint32_t page = page_table_list[table_index].addr[page_index_in_table];
+
+    // Skip request if it's table does not have a Page Directory Entry
+    if ((i386_page_directory[table_index] & PD_PRESENT) == 0) {
+        return 0;
+    }
+
+    // Get page's physical frame address
+    uint32_t phys_addr_index = page / 0x1000;
+
+    // Set page to not present, read/write, supervisor
+    page_table_list[table_index].addr[page_index_in_table] = PT_RW;
+
+    // Free page frame
+    bitset_clear_bit(i386_mem_frame_bitset, phys_addr_index);
+
+    return 1;
+}
+
+/**
  * Identity map a page so that it corresponds with physical memory
  * @param address virtual address that corresponds to page to allocate
  * @param pt_flags page table entry flags to be used
- * @param pd_flags page directory entry flags to be used if the page directory does not exist
+ * @param pd_flags page directory entry flags to be used if the page directory entry does not exist
  * @return the created page table entry
  */
 uint32_t i386_identity_map_page(uint32_t address, uint32_t pt_flags, uint32_t pd_flags) {
@@ -91,9 +126,29 @@ uint32_t i386_identity_map_page(uint32_t address, uint32_t pt_flags, uint32_t pd
 
     // Check if the page directory contains this table, and add it if not
     if ((i386_page_directory[table_index] & PD_PRESENT) == 0) {
-        printf("Adding PD entry at table_index: %u\n", table_index);
+        //printf("Adding PD entry at table_index: %u\n", table_index);
         i386_page_directory[table_index] = ((uint32_t)page_table_list[table_index].addr) | pd_flags;
     }
 
     return page;
+}
+
+void __i386_page_fault_handler(i386_registers_t *r) {
+    // Get faulting address
+    uint32_t faulting_address = get_faulting_address();
+
+    // Read error flags
+    bool present = !(r->err_code & PF_PRESENT);
+    bool rw = (r->err_code & PF_RW);
+    bool us = (r->err_code & PF_USER);
+    bool reserved = (r->err_code & PF_RESERVED);
+
+    // Dump information about fault to screen
+    printf("HALT - PAGE FAULT\n\n");
+    printf("Faulting address: 0x%x\n", faulting_address);
+    if (present) printf("Page not present\n");
+    if (rw) printf("Page not writable\n");
+    if (us) printf("Page not writable from user-mode\n");
+    if (reserved) printf("Page reserved bits overwitten\n");
+    abort();
 }

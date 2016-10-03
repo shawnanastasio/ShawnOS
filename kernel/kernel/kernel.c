@@ -88,8 +88,10 @@ void kernel_main() {
     vga_textmode_writestring("!\n\n");
 
     i386_allocate_page(0xA0000000, PT_PRESENT | PT_RW, PD_PRESENT | PD_RW);
-    uint32_t *kek = (uint32_t *)0xA0000000;
-    printf("kek: %d\n", *kek);
+    i386_free_page(0xA0000000);
+    i386_allocate_page(0xA0000000, PT_PRESENT | PT_RW, PD_PRESENT | PD_RW);
+    uint32_t *test = (uint32_t *)0xA0000000;
+    printf("test: %d\n", *test);
     i386_allocate_page(0x10001001, PT_PRESENT | PT_RW, PD_PRESENT | PD_RW);
 
     for(;;);

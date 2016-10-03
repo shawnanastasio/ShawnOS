@@ -2,6 +2,7 @@ section .text
 
 global load_page_dir
 global enable_paging
+global get_faulting_address
 
 load_page_dir:
     push ebp ; Preserve ebp on the stack
@@ -24,4 +25,9 @@ enable_paging:
 
     mov esp, ebp
     pop ebp
+    ret
+
+; Get value of cr2
+get_faulting_address:
+    mov eax, cr2
     ret

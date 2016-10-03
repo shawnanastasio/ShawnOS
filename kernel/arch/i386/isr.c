@@ -40,6 +40,16 @@ extern void _isr29();
 extern void _isr30();
 extern void _isr31();
 
+void *isr_routines[32] =
+{
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+};
+
+void isr_install_handler(int32_t isr, void (*handler)(i386_registers_t *r)) {
+    isr_routines[isr] = handler;
+}
+
 void _isr_install() {
     _idt_set_gate(0, (unsigned)_isr0, 0x08, 0x8E);
     _idt_set_gate(1, (unsigned)_isr1, 0x08, 0x8E);
@@ -77,51 +87,57 @@ void _isr_install() {
 
 const char *exception_messages[] =
 {
-  "Exception: division by zero",
-  "Exception: debug exception",
-  "Exception: non-maskable interrupt",
-  "Exception: breakpoint",
-  "Exception: overflow",
-  "Exception: out of bounds",
-  "Exception: invalid opcode",
-  "Exception: no coprocessor",
-  "Exception: double fault",
-  "Exception: coprocessor segment overrun",
-  "Exception: bad TSS",
-  "Exception: segment not present",
-  "Exception: STACK FAULT",
-  "Exception: GENERAL PROTECTION FAULT",
-  "Exception: PAGE FAULT",
-  "Exception: unknown interrupt",
-  "Exception: COPROCESSOR FAULT"
-  "Exception: alignment check",
-  "Exception: machine check"
-  "Exception: INTEL RESERVED EXCEPTION",
-  "Exception: INTEL RESERVED EXCEPTION",
-  "Exception: INTEL RESERVED EXCEPTION",
-  "Exception: INTEL RESERVED EXCEPTION",
-  "Exception: INTEL RESERVED EXCEPTION",
-  "Exception: INTEL RESERVED EXCEPTION",
-  "Exception: INTEL RESERVED EXCEPTION",
-  "Exception: INTEL RESERVED EXCEPTION",
-  "Exception: INTEL RESERVED EXCEPTION",
-  "Exception: INTEL RESERVED EXCEPTION",
-  "Exception: INTEL RESERVED EXCEPTION",
-  "Exception: INTEL RESERVED EXCEPTION",
-  "Exception: INTEL RESERVED EXCEPTION"
+    "Exception: division by zero",
+    "Exception: debug exception",
+    "Exception: non-maskable interrupt",
+    "Exception: breakpoint",
+    "Exception: overflow",
+    "Exception: out of bounds",
+    "Exception: invalid opcode",
+    "Exception: no coprocessor",
+    "Exception: double fault",
+    "Exception: coprocessor segment overrun",
+    "Exception: bad TSS",
+    "Exception: segment not present",
+    "Exception: STACK FAULT",
+    "Exception: GENERAL PROTECTION FAULT",
+    "Exception: PAGE FAULT",
+    "Exception: unknown interrupt",
+    "Exception: COPROCESSOR FAULT"
+    "Exception: alignment check",
+    "Exception: machine check"
+    "Exception: INTEL RESERVED EXCEPTION",
+    "Exception: INTEL RESERVED EXCEPTION",
+    "Exception: INTEL RESERVED EXCEPTION",
+    "Exception: INTEL RESERVED EXCEPTION",
+    "Exception: INTEL RESERVED EXCEPTION",
+    "Exception: INTEL RESERVED EXCEPTION",
+    "Exception: INTEL RESERVED EXCEPTION",
+    "Exception: INTEL RESERVED EXCEPTION",
+    "Exception: INTEL RESERVED EXCEPTION",
+    "Exception: INTEL RESERVED EXCEPTION",
+    "Exception: INTEL RESERVED EXCEPTION",
+    "Exception: INTEL RESERVED EXCEPTION",
+    "Exception: INTEL RESERVED EXCEPTION"
 };
 
 void _fault_handler(i386_registers_t *r) {
-  if (r->int_no < 32) {
-    //TODO: Replace printing with syscalls or something
-    vga_textmode_setcolor(COLOR_RED);
-    vga_textmode_writestring("\n");
-    vga_textmode_writestring(exception_messages[r->int_no]);
-    vga_textmode_writestring("\n\nStack Dump:\n");
-    printf("EIP: 0x%x\n", r->eip);
-    printf("ESP: 0x%x\n", r->esp);
-    printf("Error Code: %d\n", (int)r->err_code);
-    printf("\nHALT\n");
-    abort();
-  }
+    // Check if there is a custom handler installed for this ISR
+    if (isr_routines[r->int_no] != 0) {
+        void (*handler)(i386_registers_t *r);
+        handler = isr_routines[r->int_no];
+        handler(r);
+    } else {
+        // A specific handler doesn't exist, use the generic one
+        //TODO: Replace vga driver calls with abstraction
+        vga_textmode_setcolor(COLOR_RED);
+        vga_textmode_writestring("\n");
+        vga_textmode_writestring(exception_messages[r->int_no]);
+        vga_textmode_writestring("\n\nStack Dump:\n");
+        printf("EIP: 0x%x\n", r->eip);
+        printf("ESP: 0x%x\n", r->esp);
+        printf("Error Code: %d\n", (int)r->err_code);
+        printf("\nHALT\n");
+        abort();
+    }
 }
