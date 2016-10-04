@@ -54,21 +54,15 @@ void i386_mem_init(multiboot_info_t *mboot_header) {
     // Find the highest free address
     meminfo.highest_free_address = meminfo.mem_upper * 1024;
 
-    // Set the kernel heap size to the amount of memory required for the frame bitmap
-    //meminfo.kernel_heap_size = meminfo.highest_free_address/PAGE_SIZE;
-    meminfo.kernel_heap_size = 0x30000;
-
-    // Find block of memory to use as kernel heap
-    meminfo.kernel_heap_start = i386_mem_find_heap(meminfo.kernel_heap_size);
-    // Check if heap was not found and handle accordingly
-    if (meminfo.kernel_heap_start == 0) {
-        printf("Insufficient memory on device!\n");
-        abort();
-    }
+    // Start the kernel heap on the first page-aligned address after the kernel
+    meminfo.kernel_heap_start = (meminfo.kernel_reserved_end + 0x1000) & 0xFFFFF000;
     meminfo.kernel_heap_curpos = meminfo.kernel_heap_start;
-    meminfo.kernel_heap_end = meminfo.kernel_heap_start + meminfo.kernel_heap_size;
 
     // Allocate required memory for mem frame bitset and mark reserved frames
+    uint32_t bitset_size = meminfo.highest_free_address/0x1000;
+    // Round up to align with the size of a uint32_t
+    if (bitset_size % sizeof(uint32_t) != 0) bitset_size += bitset_size % sizeof(uint32_t);
+    // Allocate bitset
     i386_mem_frame_bitset = (uint32_t *)kmalloc_a(meminfo.highest_free_address/PAGE_SIZE);
     memset((void *)i386_mem_frame_bitset, 0, meminfo.highest_free_address/PAGE_SIZE);
     _i386_mem_init_bitset();
@@ -92,13 +86,6 @@ void _i386_mem_init_bitset() {
             // Mark frame as reserved in the bitset
             bitset_set_bit(i386_mem_frame_bitset, i / PAGE_SIZE);
         }
-    }
-
-    // Mark kernel heap memory as reserved
-    uint32_t start = (uint32_t)(meminfo.kernel_heap_start / PAGE_SIZE);
-    uint32_t end = (uint32_t)(meminfo.kernel_heap_end / PAGE_SIZE);
-    for (i=start; i<=end; i++) {
-        bitset_set_bit(i386_mem_frame_bitset, i);
     }
 }
 
@@ -149,35 +136,6 @@ uint32_t i386_mem_get_next_free_frame() {
     // No free frames were found
     printk_debug("Out of memory!");
     return 0;
-}
-
-/**
- * Find the first free frame at or after the provided counter
- * Provided for legacy support with previous memory function implementations
- * @param  counter pointer to the counter to use
- * @return         frame number
- */
-uint32_t i386_mem_peek_frame(uint32_t *counter) {
-    // Get address of next free frame
-    uint32_t addr = (*counter) * PAGE_SIZE;
-
-    // Check if we've hit the end of available memory
-    if (addr + PAGE_SIZE > meminfo.highest_free_address) {
-        return 0;
-    }
-
-    // Check if the frame lies within reserved memory
-    uint8_t reserved = i386_mem_check_reserved(addr);
-    if (reserved == MEM_RESERVED) {
-        // If it is, increment the frame number and recursively call back
-        (*counter)++;
-        return i386_mem_peek_frame(counter);
-    }
-
-    // Frame is good, increment the counter and return this frame
-    uint32_t temp = *counter;
-    (*counter)++;
-    return temp;
 }
 
 /**
@@ -284,59 +242,6 @@ void _i386_elf_sections_read() {
     // Update local data to reflect reserved memory areas
     meminfo.kernel_reserved_start = (cur_header + 1)->sh_addr;
     meminfo.kernel_reserved_end = (cur_header + (meminfo.elf_sec->num) - 1)->sh_addr;
-}
-
-/**
- * Find a continuous block of memory with size `size` to be used as kernel heap
- * Memory is page aligned.
- * @param size in bytes of heap
- * @return starting address of heap
- */
-uint32_t i386_mem_find_heap(uint32_t size) {
-    // Determine number of pages we'll need to allocate to cover this size
-    uint32_t frames = size / PAGE_SIZE;
-    if (size % PAGE_SIZE != 0) ++frames;
-
-    // Scan through frames until a continuous block of memory is found
-    uint32_t mem_counter = 1;
-    uint32_t start, end, target_frame;
-    for (;;) {
-        start = i386_mem_peek_frame(&mem_counter);
-        // Fast forward `frames` frames and see if we're in the same block
-        target_frame = start + frames - 1;
-        end = i386_mem_peek_frame(&target_frame);
-
-        //printf("end: %u, start: %u, frames: %u\n", end, start, frames);
-        if (end - start + 1 == frames) {
-            // We have a block that starts and ends on available memory,
-            // however, we must make sure all frames in between are available
-            // too
-            uint32_t i, temp;
-            bool valid = true;
-            for (i=start + 1; i<end; i++) {
-                // Ensure that this frame isn't reserved
-                mem_counter = i;
-                temp = i386_mem_peek_frame(&mem_counter);
-                if (temp != i) {
-                    // Frame is reserved, scrap block
-                    valid = false;
-                    break;
-                }
-            }
-            if (valid) {
-                return i386_mem_get_frame_start_addr(start);
-            } else {
-                // We didn't find a continuous block, start looking again at
-                // the first reserved frame
-                mem_counter = temp;
-            }
-        } else {
-            // We didn't find a continuous block, start looking again at `end`
-            mem_counter = end;
-        }
-    }
-    // No continuous chunks that big found
-    return 0;
 }
 
 /**

@@ -31,5 +31,5 @@ inline uint32_t bitset_get_bit(uint32_t *bitset, uint32_t n) {
  * @param n      bit to clear
  */
 inline void bitset_clear_bit(uint32_t *bitset, uint32_t n) {
-    bitset[INDEX_FROM_BIT(n)] ^= (1 << OFFSET_FROM_BIT(n));
+    bitset[INDEX_FROM_BIT(n)] &= ~(1 << OFFSET_FROM_BIT(n));
 }

@@ -11,6 +11,7 @@
 #include <kernel/bitset.h>
 #include <arch/i386/mem.h>
 #include <arch/i386/isr.h>
+#include <arch/i386/multiboot.h>
 
 extern void load_page_dir(uint32_t *);
 extern void enable_paging();
@@ -36,9 +37,15 @@ void i386_paging_init() {
         i386_page_directory[i] = PD_RW;
     }
 
-    // Identity map from 0x0000 to the end of the kernel binary
-    for (i=0; i<meminfo.kernel_reserved_end; i += 0x1000) {
+    // Identity map from 0x0000 to the end of the kernel heap
+    // The kernel heap will grow as we map pages,
+    for (i=0; i<meminfo.kernel_heap_curpos; i += 0x1000) {
         i386_identity_map_page(i, PT_PRESENT | PT_RW, PD_PRESENT | PD_RW);
+    }
+
+    // Mark the kernel heap as reserved in the bitset
+    for (i=meminfo.kernel_heap_start; i < meminfo.kernel_heap_curpos; i += 0x1000) {
+        bitset_set_bit(i386_mem_frame_bitset, i/0x1000);
     }
 
     // Install page fault handler

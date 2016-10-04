@@ -34,9 +34,7 @@ struct i386_mem_info {
     uint32_t kernel_reserved_end;
     uint32_t multiboot_reserved_start;
     uint32_t multiboot_reserved_end;
-    uint32_t kernel_heap_size;
     uint32_t kernel_heap_start;
-    uint32_t kernel_heap_end;
     uint32_t kernel_heap_curpos;
     uint32_t mem_lower;
     uint32_t mem_upper;
@@ -53,7 +51,6 @@ uint32_t i386_mem_get_next_free_frame();
 uint32_t i386_mem_get_frame_start_addr(uint32_t num);
 uint32_t i386_mem_get_frame_num(uint32_t addr);
 void _i386_elf_sections_read();
-uint32_t i386_mem_find_heap(uint32_t size);
 uint8_t i386_mem_check_reserved(uint32_t addr);
 uintptr_t i386_mem_kmalloc_real(uint32_t size, bool align, uintptr_t *phys);
 uintptr_t i386_mem_kmalloc(uint32_t size);
