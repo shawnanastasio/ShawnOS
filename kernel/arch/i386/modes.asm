@@ -1,3 +1,5 @@
+section .text
+
 global _i386_enter_pmode
 _i386_enter_pmode:
   cli

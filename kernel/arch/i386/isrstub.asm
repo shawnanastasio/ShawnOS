@@ -1,3 +1,6 @@
+section .text
+align 4
+
 global _isr_debug
 global _isr0
 global _isr1
@@ -245,7 +248,7 @@ isr_common_stub:
     push es
     push fs
     push gs
-    mov ax, 0x8   ; Load the Kernel Data Segment descriptor!
+    mov ax, 0x10   ; Load the Kernel Data Segment descriptor!
     mov ds, ax
     mov es, ax
     mov fs, ax

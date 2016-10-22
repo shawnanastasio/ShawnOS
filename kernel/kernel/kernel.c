@@ -37,6 +37,8 @@
 #include <arch/i386/mem.h>
 #include <arch/i386/paging.h>
 
+extern struct idt_entry idt[256];
+
 void kernel_early(uint32_t mboot_magic, multiboot_info_t *mboot_header) {
     // Set up kernel terminal for early output
     //kernel_terminal_init(14);
@@ -70,7 +72,7 @@ void kernel_early(uint32_t mboot_magic, multiboot_info_t *mboot_header) {
     };
     pit_install_scheduler_routine(kernel_task_pit_routine);
 
-    _i386_print_reserved();
+    //_i386_print_reserved();
 
     __asm__ __volatile__ ("sti");
     printk_debug("Interrupts Enabled!");
@@ -87,12 +89,6 @@ void kernel_main() {
     vga_textmode_setcolor(make_color(COLOR_LIGHT_GREY, COLOR_BLACK));
     vga_textmode_writestring("!\n\n");
 
-    i386_allocate_page(0xA0000000, PT_PRESENT | PT_RW, PD_PRESENT | PD_RW);
-    i386_free_page(0xA0000000);
-    i386_allocate_page(0xA0000000, PT_PRESENT | PT_RW, PD_PRESENT | PD_RW);
-    uint32_t *test = (uint32_t *)0xA0000000;
-    printf("test: %d\n", *test);
-    i386_allocate_page(0x10001001, PT_PRESENT | PT_RW, PD_PRESENT | PD_RW);
 
     for(;;);
 }

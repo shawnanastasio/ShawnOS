@@ -1,5 +1,7 @@
-; IRQs 0-15 will be mapped to IDT entries 32-47
+section .text
+align 4
 
+; IRQs 0-15 will be mapped to IDT entries 32-47
 global _irq0
 global _irq1
 global _irq2
@@ -120,7 +122,7 @@ irq_common_stub:
     push es
     push fs
     push gs
-    mov ax, 0x8
+    mov ax, 0x10
     mov ds, ax
     mov es, ax
     mov fs, ax

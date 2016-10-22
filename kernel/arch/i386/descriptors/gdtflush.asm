@@ -1,3 +1,5 @@
+section .text
+
 global _gdt_flush
 extern gp
 _gdt_flush:

@@ -19,5 +19,5 @@ struct idt_gate_debug {
 };
 
 void idt_install();
-void _idt_set_gate(uint8_t num, uint64_t base, uint16_t sel,
+void _idt_set_gate(uint8_t num, uint32_t base, uint16_t sel,
                    uint8_t flags);

@@ -39,7 +39,7 @@ void i386_paging_init() {
 
     // Identity map from 0x0000 to the end of the kernel heap
     // The kernel heap will grow as we map pages,
-    for (i=0; i<meminfo.kernel_heap_curpos; i += 0x1000) {
+    for (i=0; i<=meminfo.kernel_heap_curpos; i += 0x1000) {
         i386_identity_map_page(i, PT_PRESENT | PT_RW, PD_PRESENT | PD_RW);
     }
 

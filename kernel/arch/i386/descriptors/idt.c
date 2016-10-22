@@ -1,18 +1,19 @@
 #include <stdint.h>
 #include <string.h>
+#include <stdio.h>
 
 #include <arch/i386/descriptors/idt.h>
 #include <arch/i386/isr.h>
 #include <arch/i386/irq.h>
 
-struct idt_entry idt[256];
-struct idt_ptr idtp;
+struct idt_entry idt[256] __attribute__((used));
+struct idt_ptr idtp __attribute__((used));
 
 struct idt_gate_debug idt_debug[256];
 
 extern void _idt_flush();
 
-void _idt_set_gate(uint8_t num, uint64_t base, uint16_t sel,
+void _idt_set_gate(uint8_t num, uint32_t base, uint16_t sel,
                    uint8_t flags)
 {
 
@@ -24,17 +25,18 @@ void _idt_set_gate(uint8_t num, uint64_t base, uint16_t sel,
 
     idt[num].base_lo = (base & 0xFFFF);
     idt[num].base_hi = (base >> 16) & 0xFFFF;
+    idt[num].always0 = 0;
 
     idt[num].sel = sel;
     idt[num].flags = flags;
 }
 
 /**
-* Install the IDT tables with default settings
-*/
+ * Install the IDT tables with default settings
+ */
 void idt_install() {
     idtp.limit = (sizeof(struct idt_entry) * 256) - 1;
-    idtp.base = (uint32_t)&idt;
+    idtp.base = (uint32_t)&idt[0];
 
     //Wipe IDT
     memset(&idt, 0, sizeof(struct idt_entry) * 256);
