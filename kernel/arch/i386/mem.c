@@ -19,7 +19,7 @@
 #include <arch/i386/paging.h>
 
 // Global pointer to a bitset containing reserved frames
-uint32_t *i386_mem_frame_bitset;
+bitset_t i386_mem_frame_bitset;
 
 i386_mem_info_t meminfo;
 
@@ -62,9 +62,13 @@ void i386_mem_init(multiboot_info_t *mboot_header) {
     uint32_t bitset_size = meminfo.highest_free_address/0x1000;
     // Round up to align with the size of a uint32_t
     if (bitset_size % sizeof(uint32_t) != 0) bitset_size += bitset_size % sizeof(uint32_t);
-    // Allocate bitset
-    i386_mem_frame_bitset = (uint32_t *)kmalloc_a(meminfo.highest_free_address/PAGE_SIZE);
-    memset((void *)i386_mem_frame_bitset, 0, meminfo.highest_free_address/PAGE_SIZE);
+
+    // Allocate memory for bitset
+    uint32_t *bitset_start = (uint32_t *)kmalloc_a(meminfo.highest_free_address/PAGE_SIZE);
+    memset((void *)bitset_start, 0, bitset_size);
+
+    // Initalize bitset
+    bitset_init(&i386_mem_frame_bitset, bitset_start, bitset_size);
     _i386_mem_init_bitset();
 
     return;
@@ -84,7 +88,7 @@ void _i386_mem_init_bitset() {
         // Check if the current address is reserved
         if (i386_mem_check_reserved(i) == MEM_RESERVED) {
             // Mark frame as reserved in the bitset
-            bitset_set_bit(i386_mem_frame_bitset, i / PAGE_SIZE);
+            bitset_set_bit(&i386_mem_frame_bitset, i / PAGE_SIZE);
         }
     }
 }
@@ -96,7 +100,7 @@ void _i386_mem_init_bitset() {
 inline uint32_t i386_mem_allocate_frame() {
     uint32_t next_free_frame = i386_mem_get_next_free_frame();
     if (next_free_frame) {
-        bitset_set_bit(i386_mem_frame_bitset, next_free_frame);
+        bitset_set_bit(&i386_mem_frame_bitset, next_free_frame);
     }
     return next_free_frame;
 }
@@ -106,7 +110,7 @@ inline uint32_t i386_mem_allocate_frame() {
  * @param frame index of frame to free
  */
 inline void i386_mem_free_frame(uint32_t frame) {
-    bitset_clear_bit(i386_mem_frame_bitset, frame);
+    bitset_clear_bit(&i386_mem_frame_bitset, frame);
 }
 
 /**
@@ -119,12 +123,12 @@ uint32_t i386_mem_get_next_free_frame() {
     // Loop through bitset until a free frame is found
     for (i=0; i < INDEX_FROM_BIT(meminfo.highest_free_address/PAGE_SIZE); i++) {
         // Skip this entry if it is full
-        if (i386_mem_frame_bitset[i] == 0xFFFFFFFF) continue;
+        if (i386_mem_frame_bitset.start[i] == 0xFFFFFFFF) continue;
         //printf("Current Entry: 0x%x\n", i386_mem_frame_bitset[i]);
 
         // Check if this entry has a free frame
         for (j=0; j < 32; j++) {
-            if (!(i386_mem_frame_bitset[i] & (1 << j))) {
+            if (!(i386_mem_frame_bitset.start[i] & (1 << j))) {
                 // This frame is free, return it
                 //printf("FRAME #%u is free, returning!\n", i * 32 + j);
                 //printf("bitwise result: %u\n", i386_mem_frame_bitset[i] & (1 < j));

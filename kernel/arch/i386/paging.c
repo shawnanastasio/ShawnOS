@@ -45,7 +45,7 @@ void i386_paging_init() {
 
     // Mark the kernel heap as reserved in the bitset
     for (i=meminfo.kernel_heap_start; i < meminfo.kernel_heap_curpos; i += 0x1000) {
-        bitset_set_bit(i386_mem_frame_bitset, i/0x1000);
+        bitset_set_bit(& i386_mem_frame_bitset, i/0x1000);
     }
 
     // Install page fault handler
@@ -107,7 +107,7 @@ uint8_t i386_free_page(uint32_t address) {
     page_table_list[table_index].addr[page_index_in_table] = PT_RW;
 
     // Free page frame
-    bitset_clear_bit(i386_mem_frame_bitset, phys_addr_index);
+    bitset_clear_bit(&i386_mem_frame_bitset, phys_addr_index);
 
     return 1;
 }
@@ -129,7 +129,7 @@ uint32_t i386_identity_map_page(uint32_t address, uint32_t pt_flags, uint32_t pd
     page_table_list[table_index].addr[page_index_in_table] = page_index * 0x1000 | pt_flags;
 
     // Mark this page frame as allocated in the bitset
-    bitset_set_bit(i386_mem_frame_bitset, page_index);
+    bitset_set_bit(&i386_mem_frame_bitset, page_index);
 
     // Check if the page directory contains this table, and add it if not
     if ((i386_page_directory[table_index] & PD_PRESENT) == 0) {

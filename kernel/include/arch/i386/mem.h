@@ -3,6 +3,8 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#include <kernel/bitset.h>
+
 #include <arch/i386/multiboot.h>
 #include <arch/i386/paging.h>
 
@@ -20,7 +22,7 @@ enum mem_states_t {
 /**
  * Bitset containing the status of all frame numbers
  */
-extern uint32_t *i386_mem_frame_bitset;
+extern bitset_t i386_mem_frame_bitset;
 
 /**
  * Structure containing internal data for i386 memory functions
