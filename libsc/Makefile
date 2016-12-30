@@ -12,7 +12,7 @@ EXEC_PREFIX?=$(PREFIX)
 INCLUDEDIR?=$(PREFIX)/include
 LIBDIR?=$(EXEC_PREFIX)/lib
 
-CFLAGS:=$(CFLAGS) -Wall -Wextra
+CFLAGS:=$(CFLAGS) -Wall -Wextra -ffreestanding -std=gnu99
 CPPFLAGS:=$(CPPFLAGS) -D__is_shawnos_libc -Iinclude
 LIBSK_CFLAGS:=$(CFLAGS) -ffreestanding -fbuiltin
 LIBSK_CPPFLAGS:=$(CPPFLAGS) -D__is_shawnos_kernel
@@ -68,7 +68,7 @@ libsk.a: $(LIBSK_OBJS)
 	$(AR) rcs $@ $(LIBSK_OBJS)
 
 %.o: %.c
-	$(CC) -c $< -o $@ -std=gnu11 $(CFLAGS) $(CPPFLAGS)
+	$(CC) -c $< -o $@ $(CFLAGS) $(CPPFLAGS)
 
 %.o: %.S
 	$(CC) -c $< -o $@ $(CFLAGS) $(CPPFLAGS)
