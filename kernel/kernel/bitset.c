@@ -3,16 +3,19 @@
  */
 
 #include <stdint.h>
+#include <string.h>
 
 #include <kernel/kernel.h>
 #include <kernel/bitset.h>
 
 /**
  * Create a bitset
+ * size must be cleanly divisible by sizeof(uint32_t)
  */
-void bitset_init(bitset_t *bitset, uint32_t *start, uint32_t size) {
+inline void bitset_init(bitset_t *bitset, uintptr_t *start, uint32_t size) {
     bitset->start = start;
     bitset->size = size;
+    memset((void *)start, 0, bitset->size);
 }
 
 /**
@@ -21,8 +24,8 @@ void bitset_init(bitset_t *bitset, uint32_t *start, uint32_t size) {
  * @param n      bit to set
  */
 inline void bitset_set_bit(bitset_t *bitset, uint32_t n) {
-    ASSERT(n <= bitset->size, "kernel/bitset.c:bitset_set_bit():1 ASSERT failed!");
-    ASSERT(bitset, "kernel/bitset.c:bitset_set_bit():2 ASSERT failed!");
+    ASSERT(n < bitset->size);
+    ASSERT(bitset);
     bitset->start[INDEX_FROM_BIT(n)] |= (1 << OFFSET_FROM_BIT(n));
 }
 
@@ -33,8 +36,8 @@ inline void bitset_set_bit(bitset_t *bitset, uint32_t n) {
  * @return        value of requested bit
  */
 inline uint32_t bitset_get_bit(bitset_t *bitset, uint32_t n) {
-    ASSERT(n <= bitset->size, "kernel/bitset.c:bitset_get_bit():1 ASSERT failed!");
-    ASSERT(bitset, "kernel/bitset.c:bitset_get_bit():2 ASSERT failed!");
+    ASSERT(n < bitset->size);
+    ASSERT(bitset);
     return bitset->start[INDEX_FROM_BIT(n)] & (1 << OFFSET_FROM_BIT(n));
 }
 
@@ -44,7 +47,7 @@ inline uint32_t bitset_get_bit(bitset_t *bitset, uint32_t n) {
  * @param n      bit to clear
  */
 inline void bitset_clear_bit(bitset_t *bitset, uint32_t n) {
-    ASSERT(n <= bitset->size, "kernel/bitset.c:bitset_clear_bit():1 ASSERT failed!");
-    ASSERT(bitset, "kernel/bitset.c:bitset_clear_bit():2 ASSERT failed!");
+    ASSERT(n < bitset->size);
+    ASSERT(bitset);
     bitset->start[INDEX_FROM_BIT(n)] &= ~(1 << OFFSET_FROM_BIT(n));
 }

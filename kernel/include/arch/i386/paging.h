@@ -1,6 +1,7 @@
 #pragma once
 
 #include <stdint.h>
+#include <stdbool.h>
 
 #include <arch/i386/isr.h>
 
@@ -31,6 +32,11 @@ typedef struct page_table_entry page_table_entry_t;
 
 void i386_paging_init();
 uint32_t i386_allocate_page(uint32_t address, uint32_t pt_flags, uint32_t pd_flags);
-uint8_t i386_free_page(uint32_t address);
+bool i386_free_page(uint32_t address);
 uint32_t i386_identity_map_page(uint32_t address, uint32_t pt_flags, uint32_t pd_flags);
 void __i386_page_fault_handler(i386_registers_t *r);
+
+// Kernel paging interface implementation
+bool __i386_kpage_allocate(uintptr_t addr, uint32_t flags);
+bool __i386_kpage_identity_map(uintptr_t addr, uint32_t flags);
+void i386_kpage_install();

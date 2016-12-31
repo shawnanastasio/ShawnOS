@@ -7,11 +7,13 @@
 #include <stdbool.h>
 #include <stdlib.h>
 
-#include <kernel/kernel_mem.h>
+#include <mm/paging.h>
+#include <mm/alloc.h>
 #include <kernel/bitset.h>
 #include <arch/i386/mem.h>
 #include <arch/i386/isr.h>
 #include <arch/i386/multiboot.h>
+#include <arch/i386/paging.h>
 
 extern void load_page_dir(uint32_t *);
 extern void enable_paging();
@@ -25,6 +27,23 @@ uint32_t i386_page_directory_size = 0;
 // An array of the physical memory addresses and sizes of all currently created page tables.
 // For internal use, does not get passed to cpu.
 page_table_entry_t page_table_list[1024];
+
+/**
+ * Install paging functions into kernel paging interface
+ */
+void i386_kpage_install() {
+    // Install kpage_init function
+    kpaging_data.kpage_init = i386_paging_init;
+
+    // Install kpage_allocate
+    kpaging_data.kpage_allocate = __i386_kpage_allocate;
+
+    // Install kpage_free
+    kpaging_data.kpage_free = i386_free_page;
+
+    // Install kpage_identity_map
+    kpaging_data.kpage_identity_map = __i386_kpage_identity_map;
+}
 
 void i386_paging_init() {
     // Allocate the page directory
@@ -89,7 +108,7 @@ uint32_t i386_allocate_page(uint32_t address, uint32_t pt_flags, uint32_t pd_fla
  * @param  address virtual address that corresponds to page to free
  * @return 0 if operation failed, 1 if operation succeeded
  */
-uint8_t i386_free_page(uint32_t address) {
+bool i386_free_page(uint32_t address) {
     uint32_t page_index = address / 0x1000;
     uint32_t table_index = page_index / 1024;
     uint32_t page_index_in_table = page_index % 1024;
@@ -138,6 +157,26 @@ uint32_t i386_identity_map_page(uint32_t address, uint32_t pt_flags, uint32_t pd
     }
 
     return page;
+}
+
+/**
+ * Kernel paging interface function for allocating page
+ * Redirects to i386_allocate_page
+ */
+inline bool __i386_kpage_allocate(uintptr_t addr, uint32_t flags) {
+    uint32_t tmp = i386_allocate_page(addr, flags, flags);
+    if (tmp) return true;
+    return false;
+}
+
+/**
+ * Kernel paging interface implementation for identity-mapping page
+ * Redirects to i386_identity_map_page
+ */
+inline bool __i386_kpage_identity_map(uintptr_t addr, uint32_t flags) {
+    uint32_t tmp = i386_identity_map_page(addr, flags, flags);
+    if (tmp) return true;
+    return false;
 }
 
 void __i386_page_fault_handler(i386_registers_t *r) {

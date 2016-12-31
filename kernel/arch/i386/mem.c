@@ -7,11 +7,12 @@
 #include <string.h>
 #include <stdlib.h>
 #include <stdbool.h>
+#include <stddef.h>
 
 #include <kernel/kernel.h>
-#include <kernel/kernel_mem.h>
 #include <kernel/kernel_thread.h>
 #include <kernel/bitset.h>
+#include <mm/alloc.h>
 
 #include <arch/i386/multiboot.h>
 #include <arch/i386/elf.h>
@@ -63,9 +64,12 @@ void i386_mem_init(multiboot_info_t *mboot_header) {
     // Round up to align with the size of a uint32_t
     if (bitset_size % sizeof(uint32_t) != 0) bitset_size += bitset_size % sizeof(uint32_t);
 
+    // Install dumb placement allocator into kernel alloc interface
+    // This will be used until the heap can be installed (after paging)
+    kalloc_data.kalloc_malloc_real = i386_mem_kmalloc_real;
+
     // Allocate memory for bitset
     uint32_t *bitset_start = (uint32_t *)kmalloc_a(meminfo.highest_free_address/PAGE_SIZE);
-    memset((void *)bitset_start, 0, bitset_size);
 
     // Initalize bitset
     bitset_init(&i386_mem_frame_bitset, bitset_start, bitset_size);
@@ -302,7 +306,7 @@ uintptr_t i386_mem_kmalloc_real(uint32_t size, bool align, uintptr_t *phys) {
     else if (align == false && (meminfo.kernel_heap_curpos % 0x8 != 0)) {
         meminfo.kernel_heap_curpos += meminfo.kernel_heap_curpos % 0x8;
     }
-    if (phys != NULL) {
+    if (phys) {
         // If a physical address pointer is provided to us, update it
         *phys = (uintptr_t)meminfo.kernel_heap_curpos;
     }
