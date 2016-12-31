@@ -12,9 +12,14 @@ static void print(const char* data, size_t data_length)
 
 int printf(const char* restrict format, ...)
 {
-	va_list parameters;
-	va_start(parameters, format);
+    va_list args;
+    va_start(args, format);
+    vprintf(format, args);
+    va_end(args);
+}
 
+int vprintf(const char* restrict format, va_list parameters)
+{
 	int written = 0;
 	size_t amount;
 	bool rejected_bad_specifier = false;
@@ -208,7 +213,6 @@ int printf(const char* restrict format, ...)
 		}
 	}
 
-	va_end(parameters);
 
 	return written;
 }
