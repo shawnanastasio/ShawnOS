@@ -12,12 +12,6 @@
 
 struct kpaging_interface {
     /**
-     * Interface to initalize paging on system boot
-     * Called only once
-     */
-    void (*kpage_init)(void);
-
-    /**
      * Interface to allocate a page
      * @param addr Virtual memory address to allocate page at
      * @param flags Bitfield containing settings for page

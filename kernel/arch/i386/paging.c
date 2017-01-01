@@ -28,22 +28,6 @@ uint32_t i386_page_directory_size = 0;
 // For internal use, does not get passed to cpu.
 page_table_entry_t page_table_list[1024];
 
-/**
- * Install paging functions into kernel paging interface
- */
-void i386_kpage_install() {
-    // Install kpage_init function
-    kpaging_data.kpage_init = i386_paging_init;
-
-    // Install kpage_allocate
-    kpaging_data.kpage_allocate = __i386_kpage_allocate;
-
-    // Install kpage_free
-    kpaging_data.kpage_free = i386_free_page;
-
-    // Install kpage_identity_map
-    kpaging_data.kpage_identity_map = __i386_kpage_identity_map;
-}
 
 void i386_paging_init() {
     // Allocate the page directory
@@ -73,6 +57,19 @@ void i386_paging_init() {
     // Enable paging
     load_page_dir(i386_page_directory);
     enable_paging();
+
+    /**
+     * Install paging functions into kernel paging interface
+     */
+
+    // Install kpage_allocate
+    kpaging_data.kpage_allocate = __i386_kpage_allocate;
+
+    // Install kpage_free
+    kpaging_data.kpage_free = i386_free_page;
+
+    // Install kpage_identity_map
+    kpaging_data.kpage_identity_map = __i386_kpage_identity_map;
 }
 
 /**

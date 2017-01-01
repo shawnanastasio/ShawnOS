@@ -14,17 +14,6 @@
 kpaging_interface_t kpaging_data;
 
 /**
- * Initialize paging for the installed paging system
- * Only done once on system boot
- */
-void kpage_init() {
-    // Make sure that the function is installed
-    ASSERT(kpaging_data.kpage_init);
-
-    kpaging_data.kpage_init();
-}
-
-/**
  * Allocate a page using the installed paging system
  * @param  addr  Virtual memory address to allocate page at
  * @param  flags Bitfield containing settings for page

@@ -39,4 +39,3 @@ void __i386_page_fault_handler(i386_registers_t *r);
 // Kernel paging interface implementation
 bool __i386_kpage_allocate(uintptr_t addr, uint32_t flags);
 bool __i386_kpage_identity_map(uintptr_t addr, uint32_t flags);
-void i386_kpage_install();
