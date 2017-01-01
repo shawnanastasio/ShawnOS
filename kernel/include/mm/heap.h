@@ -19,19 +19,18 @@ struct kheap_block {
     uint32_t block_size;
     uint32_t section_size;
     uintptr_t start;
-    bitset_t bitset;
+    /**
+     * Bitset containing the free/allocated status of each section in the block
+     */
+    bitset_t used_sections;
+    /**
+     * Bitset containing delimiter information for each section in the block
+     * A section is marked as a delimiter if it is the last section in an
+     * allocation that has not yet been freed.
+     */
+    bitset_t delimiters;
 };
 typedef struct kheap_block kheap_block_t;
-
-/**
- * Struct placed at beginning of each allocated region
- * Stores metadata used when freeing regions
- */
-struct kheap_alloc_header {
-    uint32_t magic; // Magic number used for verification
-    uint32_t size;  // Full size of section including this header
-};
-typedef struct kheap_alloc_header kheap_alloc_header_t;
 
 /**
  * Struct for storing heap metadata
