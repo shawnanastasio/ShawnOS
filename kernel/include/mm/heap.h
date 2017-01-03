@@ -44,6 +44,8 @@ typedef struct kheap kheap_t;
 
 
 void kheap_init(kheap_t *heap);
+void _kheap_print(kheap_t *heap);
+void kheap_expand(kheap_t *heap, size_t size);
 void kheap_add_block(kheap_t *heap, uintptr_t *start, uint32_t block_size,
                      uint32_t section_size);
 uintptr_t kheap_malloc(kheap_t *heap, size_t size);

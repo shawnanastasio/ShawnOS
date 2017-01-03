@@ -59,8 +59,7 @@ void kernel_early(uint32_t mboot_magic, multiboot_info_t *mboot_header) {
     printk_debug("IDT Installed!");
     i386_mem_init(mboot_header);
     printk_debug("Memory Allocation functions enabled!");
-    i386_kpage_install(); // Install i386 kernel paging interface implementation
-    kpage_init();
+    i386_paging_init();
     printk_debug("Paging enabled!");
 
 
@@ -76,7 +75,7 @@ void kernel_early(uint32_t mboot_magic, multiboot_info_t *mboot_header) {
     };
     pit_install_scheduler_routine(kernel_task_pit_routine);
 
-    //_i386_print_reserved();
+    _i386_print_reserved();
 
     __asm__ __volatile__ ("sti");
     printk_debug("Interrupts Enabled!");
@@ -100,26 +99,22 @@ void kernel_main() {
     }
     */
 
+    printf("Heap start: 0x%x\n", meminfo.kernel_heap_start);
+    printf("Heap curpos: 0x%x\n", meminfo.kernel_heap_curpos);
+    printf("kHighest page: 0x%x\n", kpaging_data.highest_page);
+
     // Test heap
     kheap_t kheap;
     kheap_init(&kheap);
-    // Get a page and add it to heap
-    kpage_allocate(0xC0000000, KPAGE_PRESENT | KPAGE_RW);
-    kheap_add_block(&kheap, (uintptr_t *)0xC0000000, 0x1000, 0x10);
-    uintptr_t test1 = kheap_malloc(&kheap, 16);
-    printf("Got 16bytes of memory at 0x%x\n", test1);
-    uintptr_t test2 = kheap_malloc(&kheap, 16);
-    printf("Got 16bytes of memory at 0x%x\n", test2);
-    printf("Clearing 16bytes of memory at 0x%x\n", test1);
-    kheap_free(&kheap, test1);
-    printf("Clearing 16bytes of memory at 0x%x\n", test2);
-    kheap_free(&kheap, test2);
-    uintptr_t test3 = kheap_malloc(&kheap, 32);
-    printf("Got 32bytes of memory at 0x%x\n", test3);
-    kheap_alloc_header_t *alh = (kheap_alloc_header_t *)(test1-sizeof(kheap_alloc_header_t));
-    printf("Magic 1: 0x%x\n", alh->magic);
 
-    *((uintptr_t *)test1) = (uintptr_t)0xDEADBABA;
+    kheap_expand(&kheap, 0x1050);
+    uintptr_t test1 = kheap_malloc(&kheap, 0x1050);
+    printf("Got 0x1050 bytes at 0x%x\n", test1);
+    *((uintptr_t *)test1) = 0xDEADBEEF;
+    kheap_free(&kheap, test1);
+    test1 = kheap_malloc(&kheap, 0x10050);
+    printf("Got 0x10050 bytes at 0x%x\n", test1);
+
 
     for(;;);
 }

@@ -10,6 +10,8 @@
 
 #define PAGE_SIZE 4096
 
+#define EARLY_HEAP_MAXSIZE 0x50000
+
 /**
  * Enum declaring memory state values
  */

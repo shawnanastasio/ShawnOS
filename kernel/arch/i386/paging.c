@@ -7,6 +7,7 @@
 #include <stdbool.h>
 #include <stdlib.h>
 
+#include <kernel/kernel.h>
 #include <mm/paging.h>
 #include <mm/alloc.h>
 #include <kernel/bitset.h>
@@ -70,6 +71,18 @@ void i386_paging_init() {
 
     // Install kpage_identity_map
     kpaging_data.kpage_identity_map = __i386_kpage_identity_map;
+
+    // Set kernel start
+    kpaging_data.kernel_start = meminfo.kernel_reserved_start;
+
+    // Set kernel end to the end of the kernel binary + the early heap
+    kpaging_data.kernel_end = meminfo.kernel_reserved_end + EARLY_HEAP_MAXSIZE;
+
+    // Set highest kernel-owned page
+    kpaging_data.highest_page = ((kpaging_data.kernel_end + PAGE_SIZE) & 0xFFFFF000) + PAGE_SIZE;
+
+    // Set page size
+    kpaging_data.page_size = PAGE_SIZE;
 }
 
 /**
@@ -80,13 +93,14 @@ void i386_paging_init() {
  * @return the created page table entry
  */
 uint32_t i386_allocate_page(uint32_t address, uint32_t pt_flags, uint32_t pd_flags) {
+    ASSERT(address % PAGE_SIZE == 0);
     uint32_t page_index = address / 0x1000;
     uint32_t table_index = page_index / 1024;
     uint32_t page_index_in_table = page_index % 1024;
     uint32_t page = page_table_list[table_index].addr[page_index_in_table];
 
     uint32_t frame = i386_mem_allocate_frame();
-    printf("Page at 0x%x will be mapped to phys 0x%x\n", address, frame*0x1000);
+    //printk_debug("Page at 0x%x will be mapped to phys 0x%x", address, frame*0x1000);
 
     // Update page table entry in page table list
     page_table_list[table_index].addr[page_index_in_table] = (frame * 0x1000) | pt_flags;
@@ -106,6 +120,7 @@ uint32_t i386_allocate_page(uint32_t address, uint32_t pt_flags, uint32_t pd_fla
  * @return 0 if operation failed, 1 if operation succeeded
  */
 bool i386_free_page(uint32_t address) {
+    ASSERT(address % PAGE_SIZE == 0);
     uint32_t page_index = address / 0x1000;
     uint32_t table_index = page_index / 1024;
     uint32_t page_index_in_table = page_index % 1024;
@@ -136,6 +151,7 @@ bool i386_free_page(uint32_t address) {
  * @return the created page table entry
  */
 uint32_t i386_identity_map_page(uint32_t address, uint32_t pt_flags, uint32_t pd_flags) {
+    ASSERT(address % PAGE_SIZE == 0);
     uint32_t page_index = address / 0x1000;
     uint32_t table_index = page_index / 1024;
     uint32_t page_index_in_table = page_index % 1024;
@@ -161,9 +177,9 @@ uint32_t i386_identity_map_page(uint32_t address, uint32_t pt_flags, uint32_t pd
  * Redirects to i386_allocate_page
  */
 inline bool __i386_kpage_allocate(uintptr_t addr, uint32_t flags) {
-    uint32_t tmp = i386_allocate_page(addr, flags, flags);
-    if (tmp) return true;
-    return false;
+    i386_allocate_page(addr, flags, flags);
+    // TODO: add actual error handling when paging fails
+    return true;
 }
 
 /**

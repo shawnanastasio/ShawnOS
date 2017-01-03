@@ -72,7 +72,8 @@ void i386_mem_init(multiboot_info_t *mboot_header) {
     uint32_t *bitset_start = (uint32_t *)kmalloc_a(meminfo.highest_free_address/PAGE_SIZE);
 
     // Initalize bitset
-    bitset_init(&i386_mem_frame_bitset, bitset_start, bitset_size);
+    uint32_t bitset_length = (bitset_size/sizeof(uint32_t))*32;
+    bitset_init(&i386_mem_frame_bitset, bitset_start, bitset_length);
     _i386_mem_init_bitset();
 
     return;
@@ -294,6 +295,10 @@ uint8_t i386_mem_check_reserved(uint32_t addr) {
  * @param physical address of allocated memory
  */
 uintptr_t i386_mem_kmalloc_real(uint32_t size, bool align, uintptr_t *phys) {
+    // Make sure we haven't exhausted our heap
+    ASSERT(size + meminfo.kernel_heap_curpos + PAGE_SIZE <
+            meminfo.kernel_heap_start + EARLY_HEAP_MAXSIZE);
+
     // Page-align address if requested
     if (align == true && (meminfo.kernel_heap_curpos % PAGE_SIZE != 0)) {
         // The address is not already aligned, so we must do it ourselves

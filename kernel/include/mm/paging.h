@@ -33,6 +33,18 @@ struct kpaging_interface {
      * @return bool function success
      */
     bool (*kpage_identity_map)(uintptr_t addr, uint32_t flags);
+
+    // Virtual memory address that the kernel starts at
+    uintptr_t kernel_start;
+
+    // Virtual memory address that the kernel ends at
+    uintptr_t kernel_end;
+
+    // Virtual memory address of the highest page owned by the kernel
+    uintptr_t highest_page;
+
+    // Size of pages
+    uint32_t page_size;
 };
 typedef struct kpaging_interface kpaging_interface_t;
 

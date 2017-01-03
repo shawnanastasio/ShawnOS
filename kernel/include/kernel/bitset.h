@@ -7,8 +7,8 @@
 #define OFFSET_FROM_BIT(a) (a % 32)
 
 struct bitset {
-    uint32_t size;
-    uint32_t *start;
+    uint32_t length; // Number of entries in bitset
+    uint32_t *start; // Start address of bitset
 };
 typedef struct bitset bitset_t;
 

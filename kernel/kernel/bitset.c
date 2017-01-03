@@ -12,10 +12,10 @@
  * Create a bitset
  * size must be cleanly divisible by sizeof(uint32_t)
  */
-inline void bitset_init(bitset_t *bitset, uintptr_t *start, uint32_t size) {
+inline void bitset_init(bitset_t *bitset, uintptr_t *start, uint32_t length) {
     bitset->start = start;
-    bitset->size = size;
-    memset((void *)start, 0, bitset->size);
+    bitset->length = length;
+    memset((void *)start, 0, (length/32)*sizeof(uint32_t));
 }
 
 /**
@@ -24,8 +24,8 @@ inline void bitset_init(bitset_t *bitset, uintptr_t *start, uint32_t size) {
  * @param n      bit to set
  */
 inline void bitset_set_bit(bitset_t *bitset, uint32_t n) {
-    ASSERT(n < bitset->size);
     ASSERT(bitset);
+    ASSERT(n < bitset->length);
     bitset->start[INDEX_FROM_BIT(n)] |= (1 << OFFSET_FROM_BIT(n));
 }
 
@@ -36,8 +36,8 @@ inline void bitset_set_bit(bitset_t *bitset, uint32_t n) {
  * @return        value of requested bit
  */
 inline uint32_t bitset_get_bit(bitset_t *bitset, uint32_t n) {
-    ASSERT(n < bitset->size);
     ASSERT(bitset);
+    ASSERT(n < bitset->length);
     return bitset->start[INDEX_FROM_BIT(n)] & (1 << OFFSET_FROM_BIT(n));
 }
 
@@ -47,7 +47,7 @@ inline uint32_t bitset_get_bit(bitset_t *bitset, uint32_t n) {
  * @param n      bit to clear
  */
 inline void bitset_clear_bit(bitset_t *bitset, uint32_t n) {
-    ASSERT(n < bitset->size);
     ASSERT(bitset);
+    ASSERT(n < bitset->length);
     bitset->start[INDEX_FROM_BIT(n)] &= ~(1 << OFFSET_FROM_BIT(n));
 }
