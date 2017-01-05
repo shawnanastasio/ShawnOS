@@ -61,6 +61,10 @@ void kernel_early(uint32_t mboot_magic, multiboot_info_t *mboot_header) {
     printk_debug("Memory Allocation functions enabled!");
     i386_paging_init();
     printk_debug("Paging enabled!");
+    
+    
+    // Install kernel heap as default malloc/free provider
+    kheap_kalloc_install();
 
 
     // Install drivers
@@ -104,16 +108,12 @@ void kernel_main() {
     printf("kHighest page: 0x%x\n", kpaging_data.highest_page);
 
     // Test heap
-    kheap_t kheap;
-    kheap_init(&kheap);
-
-    kheap_expand(&kheap, 0x1050);
-    uintptr_t test1 = kheap_malloc(&kheap, 0x1050);
-    printf("Got 0x1050 bytes at 0x%x\n", test1);
-    *((uintptr_t *)test1) = 0xDEADBEEF;
-    kheap_free(&kheap, test1);
-    test1 = kheap_malloc(&kheap, 0x10050);
-    printf("Got 0x10050 bytes at 0x%x\n", test1);
+    uintptr_t *test1 = kmalloc(0x1050);
+    printf("Got 0x1050 bytes at 0x%x\n", (uintptr_t)test1);
+    *test1 = 0xDEADBEEF;
+    kfree(test1);
+    test1 = kmalloc(0x10050);
+    printf("Got 0x10050 bytes at 0x%x\n", (uintptr_t)test1);
 
 
     for(;;);

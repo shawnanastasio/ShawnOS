@@ -30,9 +30,9 @@ typedef struct kalloc_interface kalloc_interface_t;
 
 extern kalloc_interface_t kalloc_data;
 
-uintptr_t kalloc_malloc_real(size_t size, bool align, uintptr_t *phys);
-uintptr_t kmalloc_a(uintptr_t size);
-uintptr_t kmalloc_p(uintptr_t size, uintptr_t *phys);
-uintptr_t kmalloc_ap(uintptr_t size, uintptr_t *phys);
-uintptr_t kmalloc(size_t size);
-void kfree(uintptr_t addr);
+uintptr_t *kalloc_malloc_real(size_t size, bool align, uintptr_t *phys);
+uintptr_t *kmalloc_a(uintptr_t size);
+uintptr_t *kmalloc_p(uintptr_t size, uintptr_t *phys);
+uintptr_t *kmalloc_ap(uintptr_t size, uintptr_t *phys);
+uintptr_t *kmalloc(size_t size);
+void kfree(uintptr_t *addr);

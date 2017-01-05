@@ -15,44 +15,44 @@
  */
 kalloc_interface_t kalloc_data;
 
-uintptr_t kalloc_malloc_real(size_t size, bool align, uintptr_t *phys) {
+uintptr_t *kalloc_malloc_real(size_t size, bool align, uintptr_t *phys) {
     // Make sure that the function is installed
     ASSERT(kalloc_data.kalloc_malloc_real);
 
-    return kalloc_data.kalloc_malloc_real(size, align, phys);
+    return (uintptr_t *)kalloc_data.kalloc_malloc_real(size, align, phys);
 }
 
-uintptr_t kmalloc_a(uintptr_t size) {
+uintptr_t *kmalloc_a(uintptr_t size) {
     // Make sure that the function is installed
     ASSERT(kalloc_data.kalloc_malloc_real);
 
-    return kalloc_data.kalloc_malloc_real(size, true, NULL);
+    return (uintptr_t *)kalloc_data.kalloc_malloc_real(size, true, NULL);
 }
 
-uintptr_t kmalloc_p(uintptr_t size, uintptr_t *phys) {
+uintptr_t *kmalloc_p(uintptr_t size, uintptr_t *phys) {
     // Make sure that the function is installed
     ASSERT(kalloc_data.kalloc_malloc_real);
 
-    return kalloc_data.kalloc_malloc_real(size, false, phys);
+    return (uintptr_t *)kalloc_data.kalloc_malloc_real(size, false, phys);
 }
 
-uintptr_t kmalloc_ap(uintptr_t size, uintptr_t *phys) {
+uintptr_t *kmalloc_ap(uintptr_t size, uintptr_t *phys) {
     // Make sure that the function is installed
     ASSERT(kalloc_data.kalloc_malloc_real);
 
-    return kalloc_data.kalloc_malloc_real(size, true, phys);
+    return (uintptr_t *)kalloc_data.kalloc_malloc_real(size, true, phys);
 }
 
-uintptr_t kmalloc(size_t size) {
+uintptr_t *kmalloc(size_t size) {
     // Make sure that the function is installed
     ASSERT(kalloc_data.kalloc_malloc_real);
 
-    return kalloc_data.kalloc_malloc_real(size, false, NULL);
+    return (uintptr_t *)kalloc_data.kalloc_malloc_real(size, false, NULL);
 }
 
-void kfree(uintptr_t addr) {
+void kfree(uintptr_t *addr) {
     // Make sure that the function is installed
     ASSERT(kalloc_data.kalloc_free);
 
-    return kalloc_data.kalloc_free(addr);
+    kalloc_data.kalloc_free((uintptr_t)addr);
 }

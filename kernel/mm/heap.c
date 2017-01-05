@@ -11,6 +11,7 @@
 #include <kernel/kernel_thread.h>
 #include <kernel/bitset.h>
 #include <mm/paging.h>
+#include <mm/alloc.h>
 
 #include <mm/heap.h>
 
@@ -24,9 +25,14 @@ void kheap_init(kheap_t *heap) {
 /**
  * Install kheap as default kernel malloc
  */
-void kheap_kernel_install() {
+void kheap_kalloc_install() {
     kheap_init(&kheap_default);
+    kalloc_data.kalloc_malloc_real = __kheap_kalloc_malloc_real;
+    kalloc_data.kalloc_free = __kheap_kalloc_free;
 }
+
+
+
 
 /**
  * Debug function to print out the blocks in a kheap
@@ -132,6 +138,24 @@ void kheap_add_block(kheap_t *heap, uintptr_t *start, uint32_t block_size,
         block->next = heap->first;
     }
     heap->first = block;
+}
+
+/**
+ * Kernel alloc interface function to allocate memory
+ * Redirects to kheap_malloc
+ */
+uintptr_t __kheap_kalloc_malloc_real(size_t size, bool align, uintptr_t *phys) {
+    align = align;
+    phys = phys;
+    return kheap_malloc(&kheap_default, size);
+}
+
+/**
+ * Kernel alloc interface function to free allocated memory
+ * Redirects to kheap_free
+ */
+void __kheap_kalloc_free(uintptr_t addr) {
+    kheap_free(&kheap_default, addr);
 }
 
 uintptr_t kheap_malloc(kheap_t *heap, size_t size) {
