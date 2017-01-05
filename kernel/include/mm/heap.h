@@ -25,7 +25,7 @@ struct kheap_block {
     bitset_t used_sections;
     /**
      * Bitset containing delimiter information for each section in the block
-     * A section is marked as a delimiter if it is the last section in an
+     * A section is marked as a delimiter if it is the first or last section in an
      * allocation that has not yet been freed.
      */
     bitset_t delimiters;
@@ -51,5 +51,5 @@ void kheap_add_block(kheap_t *heap, uintptr_t *start, uint32_t block_size,
                      uint32_t section_size);
 uintptr_t __kheap_kalloc_malloc_real(size_t size, bool align, uintptr_t *phys);
 void __kheap_kalloc_free(uintptr_t addr);
-uintptr_t kheap_malloc(kheap_t *heap, size_t size);
+uintptr_t kheap_malloc(kheap_t *heap, size_t size, size_t align);
 void kheap_free(kheap_t *heap, uintptr_t addr);

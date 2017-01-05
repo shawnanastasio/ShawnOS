@@ -32,8 +32,6 @@ void kheap_kalloc_install() {
 }
 
 
-
-
 /**
  * Debug function to print out the blocks in a kheap
  * @param heap kheap object to act on
@@ -145,9 +143,12 @@ void kheap_add_block(kheap_t *heap, uintptr_t *start, uint32_t block_size,
  * Redirects to kheap_malloc
  */
 uintptr_t __kheap_kalloc_malloc_real(size_t size, bool align, uintptr_t *phys) {
-    align = align;
     phys = phys;
-    return kheap_malloc(&kheap_default, size);
+    if (align) {
+        return kheap_malloc(&kheap_default, size, kpaging_data.page_size);
+    } else {
+        return kheap_malloc(&kheap_default, size, 0);
+    }
 }
 
 /**
@@ -158,7 +159,13 @@ void __kheap_kalloc_free(uintptr_t addr) {
     kheap_free(&kheap_default, addr);
 }
 
-uintptr_t kheap_malloc(kheap_t *heap, size_t size) {
+uintptr_t kheap_malloc(kheap_t *heap, size_t size, size_t align) {
+    size_t original_size = size;
+    // Handle alignment
+    if (align > 0) {
+        size += align;
+    }
+    
     // Iterate through heap linked list until we find a block with
     // enough contiguous sections to satisfy requested size
     kheap_block_t *cur = heap->first;
@@ -198,10 +205,17 @@ uintptr_t kheap_malloc(kheap_t *heap, size_t size) {
                         bitset_set_bit(&cur->used_sections, j);
                     }
 
-                    // Mark last section in delimiter bitset
+                    // Mark first and last section in delimiter bitset
+                    bitset_set_bit(&cur->delimiters, i);
                     bitset_set_bit(&cur->delimiters, i+n_sec-1);
 
+                    // Align the address if requested
+                    if (align > 0 && section_start % align > 0) {
+                        section_start += align - (section_start % align);
+                    }
+                    
                     // Return the starting address of the allocation
+                    //printk_debug("Allocated %u sections", n_sec);
                     return section_start;
                 }
             }
@@ -215,7 +229,7 @@ uintptr_t kheap_malloc(kheap_t *heap, size_t size) {
     // Expand the heap and try again
     //printk_debug("Expanding the heap to accommodate %u more bytes", size);
     kheap_expand(heap, size);
-    return kheap_malloc(heap, size);
+    return kheap_malloc(heap, original_size, align);
 }
 
 
@@ -225,13 +239,25 @@ void kheap_free(kheap_t *heap, uintptr_t addr) {
     kheap_block_t *cur = heap->first;
     while (cur) {
         if (addr > cur->start && addr < cur->start + cur->block_size) {
-            // Starting section number
+            // Provided section number
             uint32_t sect_num = (addr - cur->start) / cur->section_size;
 
-            // Go through delimiters bitset until we find the last section of
-            // the allocation
-            uint32_t i, last_section = 0;
-            for (i=sect_num; i < cur->delimiters.length - sect_num; i++) {
+            // Go through delimiters bitset until we find the
+            // the first and last section of the allocation
+            uint32_t i, first_section = 0, last_section = 0;
+            
+            // First section
+            for (i=sect_num; i > 0; i--) {
+                if (bitset_get_bit(&cur->delimiters, i)) {
+                    // Found the first delimiter, clear it and break
+                    bitset_clear_bit(&cur->delimiters, i);
+                    first_section = i;
+                    break;
+                }
+            }
+            
+            // Last section
+            for (i=sect_num; i < cur->delimiters.length; i++) {
                 if (bitset_get_bit(&cur->delimiters, i)) {
                     // Found the delimiter, clear it and break
                     bitset_clear_bit(&cur->delimiters, i);
@@ -240,21 +266,23 @@ void kheap_free(kheap_t *heap, uintptr_t addr) {
                 }
             }
 
-            // Make sure we found the delimiter
+            // Make sure we found the delimiters
             // TODO: replace assert once debugging is done
+            ASSERT(first_section);
             ASSERT(last_section);
 
             // Clear the sections in the used_sections bitset
-            for (i=sect_num; i <= last_section; i++) {
+            for (i=first_section; i <= last_section; i++) {
                 bitset_clear_bit(&cur->used_sections, i);
             }
 
-            uint32_t allocation_size = (last_section - sect_num) + 1;
+            uint32_t allocation_size = (last_section - first_section) + 1;
 
             // Clear memory
             // TODO: analyze performance penalty of doing this
             memset((void *)addr, 0, allocation_size);
 
+            //printk_debug("Cleared %u sections", last_section-first_section+1);
             return;
         }
 

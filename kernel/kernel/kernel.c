@@ -108,10 +108,12 @@ void kernel_main() {
     printf("kHighest page: 0x%x\n", kpaging_data.highest_page);
 
     // Test heap
-    uintptr_t *test1 = kmalloc(0x1050);
+    uintptr_t *test1 = kmalloc_a(0x1050);
     printf("Got 0x1050 bytes at 0x%x\n", (uintptr_t)test1);
     *test1 = 0xDEADBEEF;
     kfree(test1);
+    uintptr_t *test2 = kmalloc_a(0x1060);
+    printf("Got 0x1060 bytes at 0x%x\n", (uintptr_t)test2);
     test1 = kmalloc(0x10050);
     printf("Got 0x10050 bytes at 0x%x\n", (uintptr_t)test1);
 
