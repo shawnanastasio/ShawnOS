@@ -1,11 +1,44 @@
 #pragma once
 
+#include <stdint.h>
 #include <stdlib.h>
 
-// Macros
+/**
+ * Kernel result codes
+ * Errors should be negative
+ */
+typedef int32_t k_return_t;
+#define K_SUCCESS 0    // Success
+#define K_UNIMPL  1    // Unimplemented
+#define K_OOM     2    // Out of memory
+#define K_IO      3    // Hardware I/O error occurred
+#define K_NOSPACE 4    // Not enough storage space
+#define K_NOTSUP  5    // Operation not supported
+#define K_FAILED  6    // Operation failed
 
+
+/**
+ * Spinlock macros
+ * See: wiki.osdev.org/Spinlock
+ */
+#define SPINLOCK_DECLARE(name) volatile int name ## Locked
+#define SPINLOCK_LOCK(name) \
+	while (!__sync_bool_compare_and_swap(& name ## Locked, 0, 1)); \
+	__sync_synchronize();
+#define SPINLOCK_UNLOCK(name) \
+	__sync_synchronize(); \
+	name ## Locked = 0;
+
+
+/**
+ * Math macros
+ */
 #define DIV_ROUND_UP(a,b) (((a - 1) / b) + 1)
 
+
+/**
+ * Kernel debug macros
+ */
 #define ASSERT(x)              \
     do {                       \
         if (!(x)) {            \

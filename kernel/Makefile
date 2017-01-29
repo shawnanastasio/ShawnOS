@@ -27,6 +27,7 @@ include drivers/pci/make.config
 include $(ARCHDIR)/make.config
 include kernel/make.config
 include mm/make.config
+include fs/make.config
 
 CFLAGS:=$(CFLAGS) $(KERNEL_ARCH_CFLAGS)
 CPPFLAGS:=$(CPPFLAGS) $(KERNEL_ARCH_CPPFLAGS)
