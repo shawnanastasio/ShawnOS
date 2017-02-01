@@ -49,7 +49,7 @@ void i386_paging_init() {
 
     // Mark the kernel heap as reserved in the bitset
     for (i=meminfo.kernel_heap_start; i < meminfo.kernel_heap_curpos; i += 0x1000) {
-        bitset_set_bit(& i386_mem_frame_bitset, i/0x1000);
+        bitset_set_bit(&i386_mem_frame_bitset, i/0x1000);
     }
 
     // Install page fault handler
