@@ -83,10 +83,11 @@ k_return_t vfs_mount(char *driver, uint32_t device, fs_inode_t *mount_point,
     }
 
     // Call driver's mount_fs and get returned superblock
-    vfs_superblock_t *res = driver_info->fs_mount(device, mount_point, options);
-    if (!res) {
+    vfs_superblock_t *newsuper = (vfs_superblock_t *)kmalloc(sizeof(vfs_superblock_t));
+    k_return_t res = driver_info->fs_mount(device, mount_point, options, newsuper);
+    if (res < 0) {
         // Driver failed to mount filesystem
-        return -K_FAILED;
+        return res;
     }
 
     // Add superblock to internal list
@@ -94,19 +95,21 @@ k_return_t vfs_mount(char *driver, uint32_t device, fs_inode_t *mount_point,
         // Not enough space in superblocks list
         return -K_OOM;
     }
-    vfs_superblocks[vfs_superblocks_size++] = res;
+    vfs_superblocks[vfs_superblocks_size++] = newsuper;
 
     // Mount filesystem
+    /*
+    res->mount_point = mount_point;
     if (mount_point) {
         // Mount at given inode
         // Make sure node isn't already a mountpoint
-        ASSERT(!(mount_point & VFS_MOUNTPOINT) && !(mount_point->redirect));
+        ASSERT(!(mount_point->flags & VFS_MOUNTPOINT) && !(mount_point->redirect));
         mount_point->flags &= VFS_MOUNTPOINT;
         mount_point->redirect = res->root;
     } else {
         // Mount at root
         vfs_root = res->root;
-    }
+    }*/
     return K_SUCCESS;
 }
 

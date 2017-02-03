@@ -43,7 +43,7 @@ struct fs_inode {
     uint32_t size;     // Size in bytes of inode
     uint32_t refcount; // Reference count
 
-    struct fs_inode redirect; // Node to redirect to (for symlink/mountpoint)
+    struct fs_inode *redirect; // Node to redirect to (for symlink/mountpoint)
 
     struct fs_inode_ops *ops; // Struct containing function pointers to handle inode
 };
@@ -107,7 +107,7 @@ typedef struct fs_inode_ops fs_inode_ops_t;
  */
 struct vfs_superblock {
     uint32_t device;        // Device number of filesystem instance
-    fs_inode_t *mountpoint; // Mountpoint of filesystem instance, or NULL for /
+    fs_inode_t *mount_point; // Mountpoint of filesystem instance, or NULL for /
     fs_inode_t *root;       // Root inode of filesystem instance
 };
 typedef struct vfs_superblock vfs_superblock_t;
@@ -127,9 +127,11 @@ struct fs_driver {
      * @param device number of device that contains filesystem to mount
      * @param mount_point VFS mountpoint to mount this fs instance at
      * @param mount_options driver-specific mount options
-     * @return superblock struct
+     * @param[out] res pointer to newly created superblock for FS instance
+     * @return kernel result code
      */
-    vfs_superblock_t *(*fs_mount)(uint32_t device, fs_inode_t *mount_point, char *options);
+    k_return_t (*fs_mount)(uint32_t device, fs_inode_t *mount_point, char *options,
+                           vfs_superblock_t *res);
 };
 typedef struct fs_driver fs_driver_t;
 
