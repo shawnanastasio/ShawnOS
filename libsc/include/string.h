@@ -17,6 +17,7 @@ size_t strlen(const char*);
 char *strcpy(char * restrict dest, const char * restrict src);
 char *strncpy(char *restrict dest, const char *restrict src, size_t n);
 char *strcat(char *dest, const char *src);
+int strcmp(const char *a, const char *b);
 
 #ifdef __cplusplus
 }

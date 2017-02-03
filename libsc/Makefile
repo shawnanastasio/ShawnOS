@@ -41,6 +41,7 @@ string/strlen.o \
 string/strcpy.o \
 string/strncpy.o \
 string/strcat.o \
+string/strcmp.o \
 ssp/ssp.o \
 
 HOSTEDOBJS:=\
