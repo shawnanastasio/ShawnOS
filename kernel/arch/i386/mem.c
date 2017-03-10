@@ -60,19 +60,17 @@ void i386_mem_init(multiboot_info_t *mboot_header) {
     meminfo.kernel_heap_curpos = meminfo.kernel_heap_start;
 
     // Allocate required memory for mem frame bitset and mark reserved frames
-    uint32_t bitset_size = meminfo.highest_free_address/0x1000;
-    // Round up to align with the size of a uint32_t
-    if (bitset_size % sizeof(uint32_t) != 0) bitset_size += bitset_size % sizeof(uint32_t);
+    uint32_t bitset_length = meminfo.highest_free_address/0x1000; // Number of entries in bitset
+    uint32_t bitset_size = DIV_ROUND_UP(bitset_length, 32)*sizeof(uint32_t); // Size in memory of bitset
 
     // Install dumb placement allocator into kernel alloc interface
     // This will be used until the heap can be installed (after paging)
     kalloc_data.kalloc_malloc_real = i386_mem_kmalloc_real;
 
     // Allocate memory for bitset
-    uint32_t *bitset_start = (uint32_t *)kmalloc_a(meminfo.highest_free_address/PAGE_SIZE);
+    uint32_t *bitset_start = (uint32_t *)i386_mem_kmalloc(bitset_size);
 
     // Initalize bitset
-    uint32_t bitset_length = (bitset_size/sizeof(uint32_t))*32;
     bitset_init(&i386_mem_frame_bitset, bitset_start, bitset_length);
     _i386_mem_init_bitset();
 
@@ -243,14 +241,27 @@ void _i386_print_reserved() {
 void _i386_elf_sections_read() {
     // Get first section headers
     elf_section_header_t *cur_header = (elf_section_header_t *)meminfo.elf_sec->addr;
+    ++cur_header;
 
     // Print initial information about ELF section header availability
     //printf("[elf] First ELF section header at 0x%x, num_sections: 0x%x, size: 0x%x\n",
     //       meminfo.elf_sec->addr, meminfo.elf_sec->num, meminfo.elf_sec->size);
 
     // Update local data to reflect reserved memory areas
-    meminfo.kernel_reserved_start = (cur_header + 1)->sh_addr;
-    meminfo.kernel_reserved_end = (cur_header + (meminfo.elf_sec->num) - 1)->sh_addr;
+    meminfo.kernel_reserved_start = cur_header->sh_addr;
+
+    // Find the highest address
+    meminfo.kernel_reserved_end = 0;
+    uint32_t i = 0;
+    for (i=0; i<meminfo.elf_sec->num - 1; i++) {
+        if (cur_header->sh_addr > meminfo.kernel_reserved_end) {
+            meminfo.kernel_reserved_end = cur_header->sh_addr;
+        }
+        ++cur_header;
+    }
+    // Round up to nearest page
+    meminfo.kernel_reserved_end += meminfo.kernel_reserved_end % 0x1000;
+    //meminfo.kernel_reserved_end = (cur_header + (meminfo.elf_sec->num) - 1)->sh_addr;
 }
 
 /**

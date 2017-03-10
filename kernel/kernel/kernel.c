@@ -61,8 +61,7 @@ void kernel_early(uint32_t mboot_magic, multiboot_info_t *mboot_header) {
     printk_debug("Memory Allocation functions enabled!");
     i386_paging_init();
     printk_debug("Paging enabled!");
-    
-    
+
     // Install kernel heap as default malloc/free provider
     kheap_kalloc_install();
 
