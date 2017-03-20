@@ -101,9 +101,7 @@ void _irq_handler(i386_registers_t *r) {
         handler(r);
     } else {
         //Until all IRQs are supported, print out debug message
-        char irq_num[3];
-        itoa(r->int_no-32, irq_num);
-        printk_debug(strcat("Don't know how to handle IRQ#", irq_num));
+        printk_debug("Don't know how to handle IRQ #%d", r->int_no-32);
     }
 
     /* If the IDT entry that was invoked was greater than 40
