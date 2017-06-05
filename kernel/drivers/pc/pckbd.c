@@ -61,7 +61,9 @@ void pckbd_irq_input_handler(i386_registers_t *r) {
         }
 
         // Check if letter and make capital
-        if (pckbd_is_shift) {
+        if (pckbd_is_capslock && pckbd_is_shift) {
+            cur_char = pckbd_selected_driver->pckbd_sc_shift_capslock->scancode_arr[cur_scancode];        
+        } else if (pckbd_is_shift) {
             cur_char = pckbd_selected_driver->pckbd_sc_shift->scancode_arr[cur_scancode];
         } else if (pckbd_is_capslock) {
             cur_char = pckbd_selected_driver->pckbd_sc_capslock->scancode_arr[cur_scancode];
