@@ -4,8 +4,7 @@
 #include <drivers/pc/pckbd.h>
 
 // US QWERTY
-
-unsigned char pckbd_us_qwerty_sc[128] = {
+int _pckbd_us_qwerty_sc_arr[128] = {
     0,  27, '1', '2', '3', '4', '5', '6', '7', '8',
     '9', '0', '-', '=', '\b',
     '\t',
@@ -43,21 +42,28 @@ unsigned char pckbd_us_qwerty_sc[128] = {
     0,	// F12 Key
     0,	// All other keys are undefined
 };
-
-/**
- * Special keys layout
- * Order:
- * 	LShift
- * 	Caps Lock
- */
-
-// US QWERTY
-uint8_t pckbd_us_qwerty_special[128] = {
-    42,
-    58
+	
+pckbd_scancode_set_t pckbd_us_qwerty_sc = {
+	.scancode_arr = _pckbd_us_qwerty_sc_arr,
+	.scancode_arr_len = 128,
 };
 
+// Shift keys
+int _pckbd_us_qwerty_shift_arr[2] = {
+    42, //LShift
+    54  //RShift
+};
+
+pckbd_scancode_set_t pckbd_us_qwerty_shift = {
+	.scancode_arr = _pckbd_us_qwerty_shift_arr,
+	.scancode_arr_len = 2,
+};
+
+// US QWERTY
+
 struct pckbd_driver pckbd_us_qwerty = {
-  pckbd_us_qwerty_sc,
-  pckbd_us_qwerty_special
+	.pckbd_sc = &pckbd_us_qwerty_sc,
+	.pckbd_shift = &pckbd_us_qwerty_shift,
+	.pckbd_caps_sc = 58,
+	.pckbd_special = NULL // Temporary
 };
