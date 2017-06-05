@@ -16,7 +16,7 @@
 #include <drivers/pc/pckbd.h>
 
 struct pckbd_driver *pckbd_selected_driver;
-bool pckbd_is_capital = false;
+bool pckbd_is_capslock = false;
 bool pckbd_is_shift = false;
 
 static inline bool set_contains_sc(pckbd_scancode_set_t *scs, int i) {
@@ -43,32 +43,36 @@ void pckbd_irq_input_handler(i386_registers_t *r) {
 
         // Handle Shift
         if (set_contains_sc(pckbd_selected_driver->pckbd_shift, cur_scancode-128)) { 
-            pckbd_is_capital = !pckbd_is_capital;
             pckbd_is_shift = !pckbd_is_shift;
         }
 
     } else {
         //Look up char in scancode table
-        unsigned char cur_char = pckbd_selected_driver->pckbd_sc->scancode_arr[cur_scancode];
+        int cur_char;
 
         // Handle shift
         if (set_contains_sc(pckbd_selected_driver->pckbd_shift, cur_scancode)) { 
-            pckbd_is_capital = !pckbd_is_capital;
             pckbd_is_shift = !pckbd_is_shift;
         }
 
         // Handle Caps Lock
         if (cur_scancode == pckbd_selected_driver->pckbd_caps_sc) {
-            pckbd_is_capital = !pckbd_is_capital;
+            pckbd_is_capslock = !pckbd_is_capslock;
         }
 
         // Check if letter and make capital
-        if (pckbd_is_capital && cur_char >= 'a' && cur_char <= 'z') {
-                cur_char -= ('a' - 'A');
+        if (pckbd_is_shift) {
+            cur_char = pckbd_selected_driver->pckbd_sc_shift->scancode_arr[cur_scancode];
+        } else if (pckbd_is_capslock) {
+            cur_char = pckbd_selected_driver->pckbd_sc_capslock->scancode_arr[cur_scancode];
+        }
+
+        else {
+            cur_char = pckbd_selected_driver->pckbd_sc->scancode_arr[cur_scancode];
         }
 
         //For now, just print out debug to screen
-        if (pckbd_selected_driver->pckbd_sc->scancode_arr[cur_scancode]) {
+        if (cur_char) {
             printf("%c", cur_char);
         }
     }
