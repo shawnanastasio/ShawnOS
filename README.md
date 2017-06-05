@@ -13,15 +13,22 @@ In order to build and run ShawnOS, a gcc cross-compiling toolchain must be prese
 
 The OSDev Wiki has a tutorial on how to create the required toolchain for Linux, OS X, and Windows [here](http://wiki.osdev.org/GCC_Cross-Compiler).
 
-In addition to the tools mentioned in the OSDev wiki, you also need the `nasm` and `xorriso` packages in order to build ShawnOS. These are available in most Linux distributions' package managers.
+In addition to the tools mentioned in the OSDev wiki, you will also need a few more packages. 
+
+- nasm
+- xorriso
+- mtools
+- grub-pc (Debian/Ubuntu only)
+
+These are available in most Linux distributions' package managers.
 ```
-# Ubuntu
-$ sudo apt-get install nasm xorriso
+# Debian/Ubuntu
+$ sudo apt-get install nasm xorriso mtools grub-pc-bin
 
 # Fedora
-$ sudo dnf install nasm xorriso
+$ sudo dnf install nasm xorriso mtools 
 
-# Arch Linux (note mtools is needed to stop GRUB from automatically trying to generate an EFI image)
+# Arch Linux
 $ sudo pacman -S nasm xorriso mtools
 ```
 
