@@ -45,8 +45,13 @@ typedef int32_t k_return_t;
             printk_debug("ASSERT failed: %s at %s:%d", #x, __FILE__, __LINE__);\
             abort();           \
         }                      \
-    } while (0)                \
+    } while (0)                
 
+#define PANIC(reason)                   \
+    do {                                \
+        printk_debug("PANIC: %s\n", reason); \
+        abort();                        \
+    } while (0)                     
 
 void kernel_task();
 void printk_debug(char *fmt, ...);
