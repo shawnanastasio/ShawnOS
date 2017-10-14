@@ -50,7 +50,7 @@ static inline fs_driver_t *vfs_get_driver(char *driver) {
  */
 void vfs_install_driver(fs_driver_t *driver) {
     // Allocate space for a the new driver
-    fs_driver_t *new = (fs_driver_t *)kmalloc(sizeof(fs_driver_t));
+    fs_driver_t *new = (fs_driver_t *)kmalloc(sizeof(fs_driver_t), KALLOC_GENERAL);
 
     // Copy the driver into newly allocated memory
     memcpy(new, driver, sizeof(fs_driver_t));
@@ -83,7 +83,7 @@ k_return_t vfs_mount(char *driver, uint32_t device, fs_inode_t *mount_point,
     }
 
     // Call driver's mount_fs and get returned superblock
-    vfs_superblock_t *newsuper = (vfs_superblock_t *)kmalloc(sizeof(vfs_superblock_t));
+    vfs_superblock_t *newsuper = (vfs_superblock_t *)kmalloc(sizeof(vfs_superblock_t), KALLOC_GENERAL);
     k_return_t res = driver_info->fs_mount(device, mount_point, options, newsuper);
     if (res < 0) {
         // Driver failed to mount filesystem

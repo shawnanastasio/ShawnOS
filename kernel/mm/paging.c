@@ -50,3 +50,10 @@ bool kpage_identity_map(uintptr_t addr, uint32_t flags) {
 
     return kpaging_data.kpage_identity_map(addr, flags);
 }
+
+uintptr_t kpage_get_phys(uintptr_t addr) {
+    // Make sure that the function is installed
+    ASSERT(kpaging_data.kpage_get_phys);
+
+    return kpaging_data.kpage_get_phys(addr);
+}

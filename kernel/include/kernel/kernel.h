@@ -14,7 +14,9 @@ typedef int32_t k_return_t;
 #define K_IO      3    // Hardware I/O error occurred
 #define K_NOSPACE 4    // Not enough storage space
 #define K_NOTSUP  5    // Operation not supported
-#define K_FAILED  6    // Operation failed
+
+// Macro to determine if kernel return code is a failure
+#define K_FAILED(code) (((code) < 0))
 
 
 /**
@@ -49,7 +51,7 @@ typedef int32_t k_return_t;
 
 #define PANIC(reason)                   \
     do {                                \
-        printk_debug("PANIC: %s\n", reason); \
+        printk_debug("PANIC: %s at %s:%d\n", reason, __FILE__, __LINE__); \
         abort();                        \
     } while (0)                     
 

@@ -57,6 +57,7 @@ void i386_mem_init(multiboot_info_t *mboot_header) {
 
     // Start the kernel heap on the first page-aligned address after the kernel
     meminfo.kernel_heap_start = (meminfo.kernel_reserved_end + 0x1000) & 0xFFFFF000;
+    printk_debug("Heap started at 0x%x", meminfo.kernel_heap_start);
     meminfo.kernel_heap_curpos = meminfo.kernel_heap_start;
 
     // Allocate required memory for mem frame bitset and mark reserved frames
@@ -66,6 +67,7 @@ void i386_mem_init(multiboot_info_t *mboot_header) {
     // Install dumb placement allocator into kernel alloc interface
     // This will be used until the heap can be installed (after paging)
     kalloc_data.kalloc_malloc_real = i386_mem_kmalloc_real;
+    kalloc_data.kalloc_free = i386_mem_kfree;
 
     // Allocate memory for bitset
     uint32_t *bitset_start = (uint32_t *)i386_mem_kmalloc(bitset_size);
@@ -297,21 +299,38 @@ uint8_t i386_mem_check_reserved(uint32_t addr) {
     return MEM_FREE;
 }
 
+// Stub for kfree. Since we're using a placement allocator this doesn't do anything
+void i386_mem_kfree(uintptr_t) {
+    printk_debug("Tried to free from i386 early mem placement allocator!")
+}
+
 /**
  * Internal function to allocate memory from the kernel heap. Should not be called
  * directly.
  *
  * @param size size of memory to allocate
  * @param align whether or not to align memory to page bounds
- * @param physical address of allocated memory
+ * @param physical address of allocated memory or null if no memory in heap
+ * @param flags kheap flags for allocation. Only KALLOC_CRITICAL is supported.
  */
-uintptr_t i386_mem_kmalloc_real(uint32_t size, bool align, uintptr_t *phys) {
+uintptr_t i386_mem_kmalloc_real(uint32_t size, uintptr_t *phys, uint32_t flags) {
+    // We only handle critical allocations this early on
+    if (!(flags & KALLOC_CRITICAL)) {
+        return 0;     
+    }
     // Make sure we haven't exhausted our heap
-    ASSERT(size + meminfo.kernel_heap_curpos + PAGE_SIZE <
-            meminfo.kernel_heap_start + EARLY_HEAP_MAXSIZE);
+    //ASSERT(size + meminfo.kernel_heap_curpos + PAGE_SIZE <
+    //        meminfo.kernel_heap_start + EARLY_HEAP_MAXSIZE);
+
+    // Return 0 if we're out of memory
+    if (size + meminfo.kernel_heap_curpos + PAGE_SIZE > 
+        meminfo.kernel_heap_start + EARLY_HEAP_MAXSIZE) {
+
+        return 0;
+    }
 
     // Page-align address if requested
-    if (align == true && (meminfo.kernel_heap_curpos % PAGE_SIZE != 0)) {
+    if (flags & KALLOC_PAGE_ALIGN && (meminfo.kernel_heap_curpos % PAGE_SIZE != 0)) {
         // The address is not already aligned, so we must do it ourselves
         meminfo.kernel_heap_curpos &= 0x100000000 - PAGE_SIZE;
         meminfo.kernel_heap_curpos += PAGE_SIZE;
@@ -319,8 +338,8 @@ uintptr_t i386_mem_kmalloc_real(uint32_t size, bool align, uintptr_t *phys) {
     // If page-alignment isn't requested, make the address 8-byte aligned.
     // 8-byte is chosen as a common value that doesn't clash with most C datatypes'
     // natural alignments
-    else if (align == false && (meminfo.kernel_heap_curpos % 0x8 != 0)) {
-        meminfo.kernel_heap_curpos += meminfo.kernel_heap_curpos % 0x8;
+    else if (!(flags & KALLOC_PAGE_ALIGN) && (meminfo.kernel_heap_curpos % 0x8 != 0)) {
+        meminfo.kernel_heap_curpos += 0x8 - meminfo.kernel_heap_curpos % 0x8;
     }
     if (phys) {
         // If a physical address pointer is provided to us, update it
@@ -338,7 +357,7 @@ uintptr_t i386_mem_kmalloc_real(uint32_t size, bool align, uintptr_t *phys) {
  * @param size size of memory to allocate
  */
 inline uintptr_t i386_mem_kmalloc(uint32_t size) {
-    return i386_mem_kmalloc_real(size, false, NULL);
+    return i386_mem_kmalloc_real(size, NULL, KALLOC_CRITICAL);
 }
 
 /**
@@ -347,7 +366,7 @@ inline uintptr_t i386_mem_kmalloc(uint32_t size) {
  * @param size size of memory to allocate
  */
 inline uintptr_t i386_mem_kmalloc_a(uint32_t size) {
-    return i386_mem_kmalloc_real(size, true, NULL);
+    return i386_mem_kmalloc_real(size, NULL, KALLOC_CRITICAL | KALLOC_PAGE_ALIGN);
 }
 
 /**
@@ -358,7 +377,7 @@ inline uintptr_t i386_mem_kmalloc_a(uint32_t size) {
  * @param phys pointer to uintptr_t to store physical address at
  */
 inline uintptr_t i386_mem_kmalloc_p(uint32_t size, uintptr_t *phys) {
-    return i386_mem_kmalloc_real(size, false, phys);
+    return i386_mem_kmalloc_real(size, phys, KALLOC_CRITICAL);
 }
 
 /**
@@ -369,5 +388,5 @@ inline uintptr_t i386_mem_kmalloc_p(uint32_t size, uintptr_t *phys) {
  * @param phys pointer to uintptr_t to store physical address at
  */
 inline uintptr_t i386_mem_kmalloc_ap(uint32_t size, uintptr_t *phys) {
-    return i386_mem_kmalloc_real(size, true, phys);
+    return i386_mem_kmalloc_real(size, phys, KALLOC_CRITICAL | KALLOC_PAGE_ALIGN);
 }

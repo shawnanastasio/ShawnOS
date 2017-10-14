@@ -20,31 +20,54 @@ extern void load_page_dir(uint32_t *);
 extern void enable_paging();
 extern uint32_t get_faulting_address();
 
-// Page Directory containing an array of pointers to page tables
-// Passed directly to load_page_dir
-uint32_t *i386_page_directory;
-uint32_t i386_page_directory_size = 0;
+// Kernel mmu data
+// Contains kernel's page directory and tables
+i386_mmu_data_t i386_kernel_mmu_data;
 
-// An array of the physical memory addresses and sizes of all currently created page tables.
-// For internal use, does not get passed to cpu.
-page_table_entry_t page_table_list[1024];
+#define TABLE_IN_DIR(table, dir) ( (uint32_t *)((((uint32_t *)(dir))[(uint32_t)(table)]) & 0xFFFFF000) )
+
+/**
+ * Initalize an empty i386_paging_data struct.
+ * Must be called before the struct is used.
+ */
+k_return_t i386_mmu_data_init(i386_mmu_data_t *this) {
+    uintptr_t tmp;
+    uint32_t i;
+    
+    // Allocate page directory
+    tmp = kmalloc_a(sizeof(uint32_t) * 1024);
+    if (!tmp) return -K_OOM;
+    this->page_directory = (uint32_t *)tmp;
+
+    // Mark all page directory entries as not present
+    for (i=0; i<1024; i++) {
+        this->page_directory[i] = PD_RW;
+    }
+
+    // Allocate virtual page table list
+    tmp = kmalloc_a(sizeof(uint32_t) * 1024)
+    if (!tmp) {
+        kfree(this->page_directory);
+        return -K_OOM;
+    }
+    this->page_tables_virt = (uint32_t *)tmp;
+
+    return K_SUCCESS;
+}
 
 
 void i386_paging_init() {
-    // Allocate the page directory
-    i386_page_directory = (uint32_t *)kmalloc_a(sizeof(uint32_t) * 1024);
-
-    // Wipe page directory
-    uint32_t i;
-    for (i=0; i < 1024; i++) {
-        // Set all page directory entries to not present, read/write, supervisor
-        i386_page_directory[i] = PD_RW;
+    // Allocate kernel paging data
+    k_return_t res = i386_mmu_data_init(&i386_kernel_mmu_data);
+    if (K_FAILED(res)) {
+        // If we don't have enough memory to allocate the kernel mmu data, panic
+        PANIC("Unable to allocate kernel mmu data! Not enough RAM?");
     }
 
     // Identity map from 0x0000 to the end of the kernel heap
     // The kernel heap will grow as we map pages,
     for (i=0; i<=meminfo.kernel_heap_curpos; i += 0x1000) {
-        i386_identity_map_page(i, PT_PRESENT | PT_RW, PD_PRESENT | PD_RW);
+        i386_identity_map_page(&i386_kernel_mmu_data, i, PT_PRESENT | PT_RW, PD_PRESENT | PD_RW);
     }
 
     // Mark the kernel heap as reserved in the bitset
@@ -72,18 +95,51 @@ void i386_paging_init() {
     // Install kpage_identity_map
     kpaging_data.kpage_identity_map = __i386_kpage_identity_map;
 
+    // Install kpage_get_phys
+    kpaging_data.kpage_get_phys = i386_page_get_phys;
+
     // Set kernel start
     kpaging_data.kernel_start = meminfo.kernel_reserved_start;
 
     // Set kernel end to the end of the kernel binary + the early heap
-    kpaging_data.kernel_end = meminfo.kernel_reserved_end + EARLY_HEAP_MAXSIZE;
+    kpaging_data.kernel_end = meminfo.kernel_heap_curpos;
 
     // Set highest kernel-owned page
     kpaging_data.highest_page = ((kpaging_data.kernel_end + PAGE_SIZE) & 0xFFFFF000) + PAGE_SIZE;
 
     // Set page size
     kpaging_data.page_size = PAGE_SIZE;
+
+    // Set total memory
+    kpaging_data.mem_total = meminfo.mem_lower + meminfo.mem_upper;
 }
+
+
+/**
+ * Get the physical address for a given virtual addres
+ * @param address virtual address to look up in page tables
+ * @return found physical address, or 0 if virtual address not in page tables
+ */
+uint32_t i386_page_get_phys(i386_mmu_data_t *this, uint32_t address) {
+    uint32_t page_index = address / PAGE_SIZE;
+    uint32_t table_index = page_index / 1024;
+    uint32_t page_index_in_table = page_index % 1024;
+
+    // Check if this page table is present
+    if ((this->page_directory[table_index] & PD_PRESENT) == 0) {
+        return 0;
+    }
+
+    // Check if this page is present
+    uint32_t page = this->page_tables_virt[table_index]
+    if ((page & PT_PRESENT) == 0) {
+        return 0;
+    }
+
+    // Remove flags from page and return
+    return page & 0xFFFFF000;
+}
+
 
 /**
  * Allocate a page at the specified address. Will overwrite any current page.
@@ -94,22 +150,30 @@ void i386_paging_init() {
  */
 uint32_t i386_allocate_page(uint32_t address, uint32_t pt_flags, uint32_t pd_flags) {
     ASSERT(address % PAGE_SIZE == 0);
-    uint32_t page_index = address / 0x1000;
+    uint32_t page_index = address / PAGE_SIZE;
     uint32_t table_index = page_index / 1024;
     uint32_t page_index_in_table = page_index % 1024;
-    uint32_t page = page_table_list[table_index].addr[page_index_in_table];
+    uint32_t page;
 
+    // Allocate a page frame
     uint32_t frame = i386_mem_allocate_frame();
+    ASSERT(frame);
     //printk_debug("Page at 0x%x will be mapped to phys 0x%x", address, frame*0x1000);
 
-    // Update page table entry in page table list
-    page_table_list[table_index].addr[page_index_in_table] = (frame * 0x1000) | pt_flags;
 
-    // Check if the page directory contains this table, and add it if not
+    // Check if this table is present and allocate it if not
     if ((i386_page_directory[table_index] & PD_PRESENT) == 0) {
-        //printf("Adding PD entry at table_index: %u\n", table_index);
-        i386_page_directory[table_index] = ((uint32_t)page_table_list[table_index].addr) | pd_flags;
+        uintptr_t phys;
+        uint32_t tmp = (uint32_t)kmalloc_ap(sizeof(uint32_t) * 1024, &phys, KALLOC_CRITICAL);
+        printk_debug("Got new page from 0x%x to 0x%x", )
+        if (!tmp || !phys) PANIC("Unable to allocate memory for page table!");
+
+        i386_page_directory[table_index] = phys | pd_flags;
     }
+
+    // Update page in page table
+    page = (frame * PAGE_SIZE) | pt_flags;
+    TABLE_IN_DIR(table_index, i386_page_directory)[page_index_in_table] = page;
 
     return page;
 }
@@ -121,7 +185,7 @@ uint32_t i386_allocate_page(uint32_t address, uint32_t pt_flags, uint32_t pd_fla
  */
 bool i386_free_page(uint32_t address) {
     ASSERT(address % PAGE_SIZE == 0);
-    uint32_t page_index = address / 0x1000;
+    uint32_t page_index = address / PAGE_SIZE;
     uint32_t table_index = page_index / 1024;
     uint32_t page_index_in_table = page_index % 1024;
     uint32_t page = page_table_list[table_index].addr[page_index_in_table];
@@ -132,7 +196,7 @@ bool i386_free_page(uint32_t address) {
     }
 
     // Get page's physical frame address
-    uint32_t phys_addr_index = page / 0x1000;
+    uint32_t phys_addr_index = page / PAGE_SIZE;
 
     // Set page to not present, read/write, supervisor
     page_table_list[table_index].addr[page_index_in_table] = PT_RW;
@@ -152,22 +216,26 @@ bool i386_free_page(uint32_t address) {
  */
 uint32_t i386_identity_map_page(uint32_t address, uint32_t pt_flags, uint32_t pd_flags) {
     ASSERT(address % PAGE_SIZE == 0);
-    uint32_t page_index = address / 0x1000;
+    uint32_t page_index = address / PAGE_SIZE;
     uint32_t table_index = page_index / 1024;
     uint32_t page_index_in_table = page_index % 1024;
-    uint32_t page = page_table_list[table_index].addr[page_index_in_table];
+    uint32_t page;
 
-    // Update page table entry in page table list
-    page_table_list[table_index].addr[page_index_in_table] = page_index * 0x1000 | pt_flags;
+    // Check if this table is present and allocate it if not
+    if ((i386_page_directory[table_index] & PD_PRESENT) == 0) {
+        uintptr_t phys;
+        uint32_t tmp = (uint32_t)kmalloc_ap(sizeof(uint32_t) * 1024, &phys, KALLOC_CRITICAL);
+        if (!tmp || !phys) PANIC("Unable to allocate memory for page table!");
+        
+        i386_page_directory[table_index] = phys | pd_flags;
+    }
+
+    // Update page in page table
+    page = (page_index * PAGE_SIZE) | pt_flags;
+    TABLE_IN_DIR(table_index, i386_page_directory)[page_index_in_table] = page;
 
     // Mark this page frame as allocated in the bitset
     bitset_set_bit(&i386_mem_frame_bitset, page_index);
-
-    // Check if the page directory contains this table, and add it if not
-    if ((i386_page_directory[table_index] & PD_PRESENT) == 0) {
-        //printf("Adding PD entry at table_index: %u\n", table_index);
-        i386_page_directory[table_index] = ((uint32_t)page_table_list[table_index].addr) | pd_flags;
-    }
 
     return page;
 }

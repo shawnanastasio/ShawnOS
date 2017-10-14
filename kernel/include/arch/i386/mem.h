@@ -10,7 +10,7 @@
 
 #define PAGE_SIZE 4096
 
-#define EARLY_HEAP_MAXSIZE 0x200000
+#define EARLY_HEAP_MAXSIZE 0x500000
 
 /**
  * Enum declaring memory state values
@@ -56,7 +56,8 @@ uint32_t i386_mem_get_frame_start_addr(uint32_t num);
 uint32_t i386_mem_get_frame_num(uint32_t addr);
 void _i386_elf_sections_read();
 uint8_t i386_mem_check_reserved(uint32_t addr);
-uintptr_t i386_mem_kmalloc_real(uint32_t size, bool align, uintptr_t *phys);
+void i386_mem_kfree(uintptr_t);
+uintptr_t i386_mem_kmalloc_real(uint32_t size, uintptr_t *phys, uint32_t flags);
 uintptr_t i386_mem_kmalloc(uint32_t size);
 uintptr_t i386_mem_kmalloc_a(uint32_t size);
 uintptr_t i386_mem_kmalloc_p(uint32_t size, uintptr_t *phys);

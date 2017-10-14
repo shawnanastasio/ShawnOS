@@ -30,10 +30,29 @@ struct page_table_entry {
 };
 typedef struct page_table_entry page_table_entry_t;
 
+/**
+ * Struct containing per-process mmu/paging data.
+ * Includes page directory, page tables, etc.
+ */
+struct i386_mmu_data {
+    /**
+     * i386 page directory. Contains 1024 page tables.
+     */
+    uint32_t *page_directory;
+
+    /**
+     * Virtual addresses of page tables. Indices correspond 1-1 with page directory.
+     * Entries contain physical addresses of page tables
+     */
+    uint32_t *page_tables_virt;
+};
+typedef struct i386_mmu_data i386_mmu_data_t;
+
 void i386_paging_init();
-uint32_t i386_allocate_page(uint32_t address, uint32_t pt_flags, uint32_t pd_flags);
-bool i386_free_page(uint32_t address);
-uint32_t i386_identity_map_page(uint32_t address, uint32_t pt_flags, uint32_t pd_flags);
+uint32_t i386_page_get_phys(i386_mmu_data_t *this, uint32_t address);
+uint32_t i386_allocate_page(i386_mmu_data_t *this, uint32_t address, uint32_t pt_flags, uint32_t pd_flags);
+bool i386_free_page(i386_mmu_data_t *this, uint32_t address);
+uint32_t i386_identity_map_page(i386_mmu_data_t *this, uint32_t address, uint32_t pt_flags, uint32_t pd_flags);
 void __i386_page_fault_handler(i386_registers_t *r);
 
 // Kernel paging interface implementation

@@ -13,10 +13,10 @@
  * Create a bitset
  * size must be cleanly divisible by sizeof(uint32_t)
  */
-inline void bitset_init(bitset_t *bitset, uintptr_t *start, uint32_t length) {
+inline void bitset_init(bitset_t *bitset, void *start, uint32_t length) {
     bitset->start = start;
     bitset->length = length;
-    memset((void *)start, 0, DIV_ROUND_UP(length, 32)*sizeof(uint32_t));
+    memset(start, 0, DIV_ROUND_UP(length, 32)*sizeof(uint32_t));
 }
 
 /**

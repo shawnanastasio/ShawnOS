@@ -65,7 +65,6 @@ void kernel_early(uint32_t mboot_magic, multiboot_info_t *mboot_header) {
     // Install kernel heap as default malloc/free provider
     kheap_kalloc_install();
 
-
     // Install drivers
     pit_timer_install_irq(); // Install PIT driver
     pckbd_install_irq(&pckbd_us_qwerty); // Install US PS/2 driver
@@ -78,7 +77,7 @@ void kernel_early(uint32_t mboot_magic, multiboot_info_t *mboot_header) {
     };
     pit_install_scheduler_routine(kernel_task_pit_routine);
 
-    _i386_print_reserved();
+    //_i386_print_reserved();
 
     __asm__ __volatile__ ("sti");
     printk_debug("Interrupts Enabled!");
@@ -105,19 +104,17 @@ void kernel_main() {
     printf("Heap start: 0x%x\n", meminfo.kernel_heap_start);
     printf("Heap curpos: 0x%x\n", meminfo.kernel_heap_curpos);
     printf("kHighest page: 0x%x\n", kpaging_data.highest_page);
+    
+#if 1
+    for (;;) {
+        uint32_t tmp = (uint32_t)kmalloc(0x10000, 0);
+        tmp = tmp;
+        memset((void *)tmp, 0xFF, 0x10000);
+        //printk_debug("Got 0x10000 bytes at 0x%x", tmp);
+    }
+#endif
 
-    // Test heap
-    uintptr_t *test1 = kmalloc_a(0x1050);
-    printf("Got 0x1050 bytes at 0x%x\n", (uintptr_t)test1);
-    *test1 = 0xDEADBEEF;
-    kfree(test1);
-    uintptr_t *test2 = kmalloc_a(0x1060);
-    printf("Got 0x1060 bytes at 0x%x\n", (uintptr_t)test2);
-    test1 = kmalloc(0x10050);
-    printf("Got 0x10050 bytes at 0x%x\n", (uintptr_t)test1);
-
-
-    for(;;);
+    //for(;;);
 }
 
 /**
