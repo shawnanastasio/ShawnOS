@@ -300,8 +300,9 @@ uint8_t i386_mem_check_reserved(uint32_t addr) {
 }
 
 // Stub for kfree. Since we're using a placement allocator this doesn't do anything
-void i386_mem_kfree(uintptr_t) {
-    printk_debug("Tried to free from i386 early mem placement allocator!")
+void i386_mem_kfree(uintptr_t tmp) {
+    tmp = tmp;
+    printk_debug("Tried to free from i386 early mem placement allocator!");
 }
 
 /**

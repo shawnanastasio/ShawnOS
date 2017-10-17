@@ -5,7 +5,7 @@
 
 /**
  * Kernel result codes
- * Errors should be negative
+ * Errors should be negative.
  */
 typedef int32_t k_return_t;
 #define K_SUCCESS 0    // Success
@@ -14,6 +14,7 @@ typedef int32_t k_return_t;
 #define K_IO      3    // Hardware I/O error occurred
 #define K_NOSPACE 4    // Not enough storage space
 #define K_NOTSUP  5    // Operation not supported
+#define K_INVALOP 6    // Invalid operation
 
 // Macro to determine if kernel return code is a failure
 #define K_FAILED(code) (((code) < 0))

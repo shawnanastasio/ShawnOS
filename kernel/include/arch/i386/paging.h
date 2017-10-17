@@ -22,13 +22,7 @@
 #define PF_RW (1<<1)           // Was the page wrongfully written to?
 #define PF_USER (1<<2)         // Was the CPU in user-mode?
 #define PF_RESERVED (1<<3)     // Were the CPU-reserved bytes overwritten?
-#define PF_ID (0x10)           // Was the fault caused by an instruction fetch?
-
-struct page_table_entry {
-    uint32_t *addr; // Physical address of the page table
-    //uint32_t size; // Number of entries out of 1024 in this table
-};
-typedef struct page_table_entry page_table_entry_t;
+#define PF_ID (1<<4)           // Was the fault caused by an instruction fetch?
 
 /**
  * Struct containing per-process mmu/paging data.
@@ -43,18 +37,23 @@ struct i386_mmu_data {
     /**
      * Virtual addresses of page tables. Indices correspond 1-1 with page directory.
      * Entries contain physical addresses of page tables
+     * 
+     * Ex. To access the first page in the second page table, do the following:
+     * page_tables_virt[2][1]
      */
-    uint32_t *page_tables_virt;
+    uint32_t **page_tables_virt;
 };
 typedef struct i386_mmu_data i386_mmu_data_t;
 
 void i386_paging_init();
 uint32_t i386_page_get_phys(i386_mmu_data_t *this, uint32_t address);
 uint32_t i386_allocate_page(i386_mmu_data_t *this, uint32_t address, uint32_t pt_flags, uint32_t pd_flags);
-bool i386_free_page(i386_mmu_data_t *this, uint32_t address);
+k_return_t i386_free_page(i386_mmu_data_t *this, uint32_t address);
 uint32_t i386_identity_map_page(i386_mmu_data_t *this, uint32_t address, uint32_t pt_flags, uint32_t pd_flags);
 void __i386_page_fault_handler(i386_registers_t *r);
 
 // Kernel paging interface implementation
-bool __i386_kpage_allocate(uintptr_t addr, uint32_t flags);
-bool __i386_kpage_identity_map(uintptr_t addr, uint32_t flags);
+k_return_t __i386_kpage_allocate(uintptr_t addr, uint32_t flags);
+k_return_t __i386_kpage_free(uintptr_t addr);
+k_return_t __i386_kpage_identity_map(uintptr_t addr, uint32_t flags);
+uintptr_t __i386_kpage_get_phys(uintptr_t addr);
