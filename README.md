@@ -50,12 +50,12 @@ $ source env.sh
 
 Now you may build an ISO image of the OS:
 ```
-$ ./iso.sh
+$ make iso
 ```
 
 If you have qemu installed for the proper architecture, you can also run ShawnOS in a virtual machine:
 ```
-$ ./qemu.sh
+$ make qemu
 ```
 
 Goals
