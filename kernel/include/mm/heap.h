@@ -5,8 +5,8 @@
 
 #include <kernel/bitset.h>
 
-#define BLOCK_SIZE_DEFAULT 0x10000 // Each heap entry (block) is 0x10000 bytes
-#define SECTION_SIZE_DEFAULT 0x10  // Each block is sectioned into 16byte chunks
+#define BLOCK_SIZE_DEFAULT 0x100000 // Each heap entry (block) is 0x10000 bytes
+#define SECTION_SIZE_DEFAULT 0x10   // Each block is sectioned into 16byte chunks
 
 #define BLOCK_MAGIC 0xDEADBEEF
 
@@ -53,6 +53,7 @@ struct kheap {
     size_t effective_size; // Total effective size of heap (not including metadata)
     size_t max_expand_size; // Maximum size heap can be expanded at once
     size_t cur_expand_size; // Current size to expand the heap by
+    size_t total_free_sections; // Total number of free sections in all blocks in this heap
 };
 typedef struct kheap kheap_t;
 

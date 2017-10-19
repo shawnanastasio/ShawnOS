@@ -36,7 +36,7 @@ typedef int32_t k_return_t;
 /**
  * Math macros
  */
-#define DIV_ROUND_UP(a,b) (((a - 1) / b) + 1)
+#define DIV_ROUND_UP(a,b) ((((a) - 1) / (b)) + 1)
 
 
 /**

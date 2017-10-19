@@ -68,14 +68,8 @@ void i386_paging_init() {
     }
 
     // Identity map from 0x0000 to the end of the kernel heap
-    // The kernel heap will grow as we map pages,
-    for (i=0; i<=meminfo.kernel_heap_curpos; i += 0x1000) {
+    for (i=0; i<=meminfo.kernel_heap_start + EARLY_HEAP_MAXSIZE; i += 0x1000) {
         i386_identity_map_page(&i386_kernel_mmu_data, i, PT_PRESENT | PT_RW, PD_PRESENT | PD_RW);
-    }
-
-    // Mark the kernel heap as reserved in the bitset
-    for (i=meminfo.kernel_heap_start; i < meminfo.kernel_heap_curpos; i += 0x1000) {
-        bitset_set_bit(&i386_mem_frame_bitset, i/0x1000);
     }
 
     // Install page fault handler
@@ -108,7 +102,8 @@ void i386_paging_init() {
     kpaging_data.kernel_end = meminfo.kernel_heap_curpos;
 
     // Set highest kernel-owned page
-    kpaging_data.highest_page = ((kpaging_data.kernel_end + PAGE_SIZE) & 0xFFFFF000) + PAGE_SIZE;
+    //kpaging_data.highest_page = ((kpaging_data.kernel_end + PAGE_SIZE) & 0xFFFFF000) + PAGE_SIZE;
+    kpaging_data.highest_page = meminfo.kernel_heap_start + EARLY_HEAP_MAXSIZE + PAGE_SIZE;
 
     // Set page size
     kpaging_data.page_size = PAGE_SIZE;
@@ -165,6 +160,7 @@ uint32_t i386_allocate_page(i386_mmu_data_t *this, uint32_t address, uint32_t pt
 
     // Check if this table is present and allocate it if not
     if ((this->page_directory[table_index] & PD_PRESENT) == 0) {
+        printk_debug("Allocating new page table");
         uintptr_t phys;
         uint32_t *virt = (uint32_t *)kmalloc_ap(sizeof(uint32_t) * 1024, &phys, KALLOC_CRITICAL);
         if (!virt || !phys) PANIC("Unable to allocate memory for page table!");
