@@ -20,17 +20,25 @@ LIBDIR=$(EXEC_PREFIX)/lib
 BOOTDIR=/boot
 PWD:=$(shell pwd)
 
+# Target definitions
+TARGET_ISO=shawnos.iso
+
 # Utility paths
 MKRESCUE:=$(shell command -v grub-mkrescue 2>/dev/null || command -v grub2-mkrescue 2>/dev/null)
 XORRISO:=$(shell command -v xorriso 2>/dev/null)
-
+QEMU:=$(shell command -v qemu-system-$(HOSTARCH) 2>/dev/null)
 
 # Include makefiles from kernel and libsc
 include kernel/Makefile
 include libsc/Makefile
 
 # Top level PHONYs. These are what you should call.
-.PHONY: qemu iso build clean
+.PHONY: all qemu iso build clean
+
+clean: clean_all
+	rm -rfv sysroot
+	rm -rfv isodir
+	rm -fv $(TARGET_ISO)
 
 build: install_all_headers install_all_libs install_all_binaries
 
@@ -43,22 +51,26 @@ ifndef MKRESCUE
 endif
 
 ifndef XORRISO
-		$(error Please ensure xorriso is installed and in your PATH)
+	$(error Please ensure xorriso is installed and in your PATH)
 endif
 
-	cp $(DESTDIR)/$(BOOTDIR)/shawnos.kernel isodir/boot/shawnos.kernel
-	
-	cat > isodir/boot/grub/grub.cfg << EOF \
-	menuentry "shawnos" {                  \
-		multiboot /boot/shawnos.kernel     \
-	}                                      \
-	EOF                                    \
+	mkdir -p isodir/boot/grub
 
-	$(MKRESCUE) -o shawnos.iso isodir
+	cp $(DESTDIR)/$(BOOTDIR)/shawnos.kernel isodir/boot/shawnos.kernel
+	cp grub.cfg isodir/boot/grub/
+
+	$(MKRESCUE) -o $(TARGET_ISO) isodir
+
+qemu: iso
+ifndef QEMU
+	$(error Please ensure qemu-system-$(HOSTARCH) is installed and in your PATH)
+endif
+	$(QEMU) -device ich9-ahci,id=ahci -cdrom $(TARGET_ISO) -m 128m
 
 
 # Internal PHONYs
-.PHONY: install_all_headers install_all_libs install_all_binaries
+.PHONY: install_all_headers install_all_libs install_all_binaries clean_all
 install_all_headers: libsk_install_headers kernel_install_headers
 install_all_libs: libsk_install_libs
 install_all_binaries: kernel_install_binary
+clean_all: kernel_clean libsk_clean
