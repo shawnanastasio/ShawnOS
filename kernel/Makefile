@@ -1,90 +1,69 @@
-HOST?=$(shell ../default-host.sh)
-HOSTARCH:=$(shell ../target-triplet-to-arch.sh $(HOST))
+KERNEL_ROOT=kernel
 
-CFLAGS?=-O2 -g
-CPPFLAGS?=
-LDFLAGS?=
-LIBS?=
+KERNEL_CFLAGS:=$(CFLAGS) --sysroot=$(PWD)/sysroot -isystem=$(INCLUDEDIR) -ffreestanding -fbuiltin -Wall -Wextra -Wno-format -fstack-protector-all -std=c99 -Werror -Iinclude
+KERNEL_LDFLAGS:=$(LDFLAGS) -nostdlib -lsk -lgcc -L $(DESTDIR)/$(LIBDIR)
 
-DESTDIR?=
-PREFIX?=/usr/local
-EXEC_PREFIX?=$(PREFIX)
-BOOTDIR?=$(EXEC_PREFIX)/boot
-INCLUDEDIR?=$(PREFIX)/include
+KERNEL_ARCHDIR:=$(KERNEL_ROOT)/arch/$(HOSTARCH)
 
-CFLAGS:=$(CFLAGS) -ffreestanding -fbuiltin -Wall -Wextra -Wno-format -fstack-protector-all -std=c11 -Werror
-CPPFLAGS:=$(CPPFLAGS) -D__is_shawnos_kernel -Iinclude
-LDFLAGS:=$(LDFLAGS)
-LIBS:=$(LIBS) -nostdlib -lsk -lgcc
-
-ARCHDIR:=arch/$(HOSTARCH)
-
-#Pre-lined objects
-include drivers/pc/make.config
-include drivers/vga/make.config
-include drivers/pci/make.config
+#Pre-linked objects
+include $(KERNEL_ROOT)/drivers/pc/make.config
+include $(KERNEL_ROOT)/drivers/vga/make.config
+include $(KERNEL_ROOT)/drivers/pci/make.config
 #include drivers/sata/make.config
-include $(ARCHDIR)/make.config
-include kernel/make.config
-include mm/make.config
-include fs/make.config
+include $(KERNEL_ARCHDIR)/make.config
+include $(KERNEL_ROOT)/kernel/make.config
+include $(KERNEL_ROOT)/mm/make.config
+include $(KERNEL_ROOT)/fs/make.config
 
-CFLAGS:=$(CFLAGS) $(KERNEL_ARCH_CFLAGS)
-CPPFLAGS:=$(CPPFLAGS) $(KERNEL_ARCH_CPPFLAGS)
-LDFLAGS:=$(LDFLAGS) $(KERNEL_ARCH_LDFLAGS)
-LIBS:=$(LIBS) $(KERNEL_ARCH_LIBS)
+KERNEL_CFLAGS:=$(KERNEL_CFLAGS) $(KERNEL_ARCH_CFLAGS)
+KERNEL_LDFLAGS:=$(KERNEL_LDFLAGS) $(KERNEL_ARCH_LDFLAGS)
 
-OBJS:=\
+
+KERNEL_OBJS:=\
 $(KERNEL_ARCH_OBJS_PRE) \
 $(KERNEL_ARCH_OBJS) \
 
 
-CRTI_OBJ:=$(ARCHDIR)/crti.o
-CRTBEGIN_OBJ:=$(shell $(CC) $(CFLAGS) $(LDFLAGS) -print-file-name=crtbegin.o)
-CRTEND_OBJ:=$(shell $(CC) $(CFLAGS) $(LDFLAGS) -print-file-name=crtend.o)
-CRTN_OBJ:=$(ARCHDIR)/crtn.o
+KERNEL_CRTI_OBJ:=$(KERNEL_ARCHDIR)/crti.o
+KERNEL_CRTBEGIN_OBJ:=$(shell $(CC) $(KERNEL_CFLAGS) $(KERNEL_LDFLAGS) -print-file-name=crtbegin.o)
+KERNEL_CRTEND_OBJ:=$(shell $(CC) $(KERNEL_CFLAGS) $(KERNEL_LDFLAGS) -print-file-name=crtend.o)
+KERNEL_CRTN_OBJ:=$(KERNEL_ARCHDIR)/crtn.o
 
-ALL_OUR_OBJS:=\
-$(CRTI_OBJ) \
-$(OBJS) \
-$(CRTN_OBJ) \
+KERNEL_ALL_OBJS:=\
+$(KERNEL_CRTI_OBJ) \
+$(KERNEL_OBJS) \
+$(KERNEL_CRTN_OBJ) \
 
-OBJ_LINK_LIST:=\
-$(CRTI_OBJ) \
-$(CRTBEGIN_OBJ) \
-$(OBJS) \
-$(CRTEND_OBJ) \
-$(CRTN_OBJ) \
+KERNEL_OBJ_LINK_LIST:=\
+$(KERNEL_CRTI_OBJ) \
+$(KERNEL_CRTBEGIN_OBJ) \
+$(KERNEL_OBJS) \
+$(KERNEL_CRTEND_OBJ) \
+$(KERNEL_CRTN_OBJ) \
 
-all: shawnos.kernel
+.PHONY: kernel_clean kernel_install kernel_install_headers kernel_install_binary
 
-.PHONY: all clean install install-headers install-kernel
-
-shawnos.kernel: $(OBJ_LINK_LIST) $(ARCHDIR)/linker.ld
-	$(CC) -T $(ARCHDIR)/linker.ld -o $@ $(CFLAGS) $(OBJ_LINK_LIST) $(LDFLAGS) $(LIBS)
+shawnos.kernel: $(KERNEL_OBJ_LINK_LIST) $(KERNEL_ARCHDIR)/linker.ld
+	$(CC) -T $(KERNEL_ARCHDIR)/linker.ld -o $(KERNEL_ROOT)/$@ $(KERNEL_CFLAGS) $(KERNEL_OBJ_LINK_LIST) $(KERNEL_LDFLAGS) $(LIBS)
 
 %.o: %.c
-	$(CC) -c $< -o $@ $(CFLAGS) $(CPPFLAGS)
-
-%.o: %.S
-	$(CC) -c $< -o $@ $(CFLAGS) $(CPPFLAGS)
-
+	$(CC) -c $< -o $@ $(KERNEL_CFLAGS)
 
 #TODO: make makefile NASM non-hardcoded to elf32
 %.o: %.asm
-	nasm -felf32 $< -o $@
+	$(NASM) -felf32 $< -o $@
 
-clean:
-	rm -f shawnos.kernel $(OBJS) $(ALL_OUR_OBJS) *.o */*.o */*/*.o
+kernel_clean:
+	rm -f shawnos.kernel $(KERNEL_OBJS) $(KERNEL_ALL_OBJS) *.o */*.o */*/*.o
 
-install: install-headers install-kernel
+kernel_install: kernel_install_headers kernel_install_binary
 
-install-headers:
-	mkdir -p $(DESTDIR)$(INCLUDEDIR)
-	cp -Rv include/* $(DESTDIR)$(INCLUDEDIR)/
+kernel_install_headers:
+	mkdir -p $(DESTDIR)/$(INCLUDEDIR)
+	cp -Rv $(KERNEL_ROOT)/include/* $(DESTDIR)/$(INCLUDEDIR)/
 
-install-kernel: shawnos.kernel
-	mkdir -p $(DESTDIR)$(BOOTDIR)
-	cp shawnos.kernel $(DESTDIR)$(BOOTDIR)
+kernel_install_binary: shawnos.kernel
+	mkdir -p $(DESTDIR)/$(BOOTDIR)
+	cp $(KERNEL_ROOT)/shawnos.kernel $(DESTDIR)/$(BOOTDIR)
 
 print-%  : ; @echo $* = $($*)

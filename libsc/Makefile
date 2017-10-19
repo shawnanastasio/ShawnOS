@@ -1,101 +1,60 @@
-HOST?=$(shell ../default-host.sh)
-HOSTARCH:=$(shell ../target-triplet-to-arch.sh $(HOST))
+LIBSK_ROOT=libsc
 
-CFLAGS?=-O2 -g
-CPPFLAGS?=
-LDFLAGS?=
-LIBS?=
+LIBSK_ARCHDIR:=$(LIBSK_ROOT)/arch/$(HOSTARCH)
+include $(LIBSK_ARCHDIR)/make.config
 
-DESTDIR?=
-PREFIX?=/usr/local
-EXEC_PREFIX?=$(PREFIX)
-INCLUDEDIR?=$(PREFIX)/include
-LIBDIR?=$(EXEC_PREFIX)/lib
+LIBSK_CFLAGS:=$(CFLAGS) --sysroot=$(PWD)/sysroot -isystem=$(INCLUDEDIR) -Wall -Wextra -ffreestanding -std=gnu11 -ffreestanding -fbuiltin
 
-CFLAGS:=$(CFLAGS) -Wall -Wextra -ffreestanding -std=gnu99
-CPPFLAGS:=$(CPPFLAGS) -D__is_shawnos_libc -Iinclude
-LIBSK_CFLAGS:=$(CFLAGS) -ffreestanding -fbuiltin
-LIBSK_CPPFLAGS:=$(CPPFLAGS) -D__is_shawnos_kernel
+LIBSK_FREEOBJS:=\
+$(LIBSK_ARCH_FREEOBJS) \
+$(LIBSK_ROOT)/stdio/printf.o \
+$(LIBSK_ROOT)/stdio/putchar.o \
+$(LIBSK_ROOT)/stdio/puts.o \
+$(LIBSK_ROOT)/stdlib/abort.o \
+$(LIBSK_ROOT)/stdlib/itoa.o \
+$(LIBSK_ROOT)/string/memcmp.o \
+$(LIBSK_ROOT)/string/memcpy.o \
+$(LIBSK_ROOT)/string/memmove.o \
+$(LIBSK_ROOT)/string/memset.o \
+$(LIBSK_ROOT)/string/strlen.o \
+$(LIBSK_ROOT)/string/strcpy.o \
+$(LIBSK_ROOT)/string/strncpy.o \
+$(LIBSK_ROOT)/string/strcat.o \
+$(LIBSK_ROOT)/string/strcmp.o \
+$(LIBSK_ROOT)/ssp/ssp.o \
 
-ARCHDIR:=arch/$(HOSTARCH)
+LIBSK_HOSTEDOBJS:=\
+$(LIBSK_ARCH_HOSTEDOBJS) \
 
-include $(ARCHDIR)/make.config
+LIBSK_OBJS:=\
+$(LIBSK_FREEOBJS) \
 
-CFLAGS:=$(CFLAGS) $(ARCH_CFLAGS)
-CPPFLAGS:=$(CPPFLAGS) $(ARCH_CPPFLAGS)
-LIBSK_CFLAGS:=$(LIBSK_CFLAGS) $(KERNEL_ARCH_CFLAGS)
-LIBSK_CPPFLAGS:=$(LIBSK_CPPFLAGS) $(KERNEL_ARCH_CPPFLAGS)
 
-FREEOBJS:=\
-$(ARCH_FREEOBJS) \
-stdio/printf.o \
-stdio/putchar.o \
-stdio/puts.o \
-stdlib/abort.o \
-stdlib/itoa.o \
-string/memcmp.o \
-string/memcpy.o \
-string/memmove.o \
-string/memset.o \
-string/strlen.o \
-string/strcpy.o \
-string/strncpy.o \
-string/strcat.o \
-string/strcmp.o \
-ssp/ssp.o \
+LIBSK_OBJS:=$(LIBSK_FREEOBJS:.o=.libsk.o)
 
-HOSTEDOBJS:=\
-$(ARCH_HOSTEDOBJS) \
+LIBSK_BINARIES=libsk.a
 
-OBJS:=\
-$(FREEOBJS) \
-$(HOSTEDOBJS) \
+.PHONY: libsk_clean libsk_install libsk_install_headers libsk_install_libs
 
-LIBSK_OBJS:=$(FREEOBJS:.o=.libsk.o)
-
-BINARIES=libsc.a libg.a libsk.a
-
-all: $(BINARIES)
-
-.PHONY: all clean install install-headers install-libs
-
-libsc.a: $(OBJS)
-	$(AR) rcs $@ $(OBJS)
-
-libg.a:
-	$(AR) rcs $@
 
 libsk.a: $(LIBSK_OBJS)
-	$(AR) rcs $@ $(LIBSK_OBJS)
-
-%.o: %.c
-	$(CC) -c $< -o $@ $(CFLAGS) $(CPPFLAGS)
-
-%.o: %.S
-	$(CC) -c $< -o $@ $(CFLAGS) $(CPPFLAGS)
-
-#TODO: make makefile NASM non-hardcoded to elf32
-%.o: %.asm
-	nasm -felf32 $< -o $@
+	$(AR) rcs $(LIBSK_ROOT)/$@ $(LIBSK_OBJS)
 
 %.libsk.o: %.asm
 	nasm -felf32 $< -o $@
 
 %.libsk.o: %.c
-	$(CC) -c $< -o $@ -std=gnu11 $(LIBSK_CFLAGS) $(LIBSK_CPPFLAGS)
-
-%.libsk.o: %.S
-	$(CC) -c $< -o $@ $(LIBSK_CFLAGS) $(LIBSK_CPPFLAGS)
+	$(CC) -c $< -o $@ $(LIBSK_CFLAGS)
 
 clean:
-	rm -f $(BINARIES) $(OBJS) $(LIBSK_OBJS) *.o */*.o */*/*.o
+	rm -f $(LIBSK_BINARIES) $(OBJS) $(LIBSK_OBJS) *.o */*.o */*/*.o
 
-install: install-headers install-libs
+libsk_install: libsk_install_headers libsk_install_libs
 
-install-headers:
-	mkdir -p $(DESTDIR)$(INCLUDEDIR)
-	cp -Rv include/* $(DESTDIR)$(INCLUDEDIR)/
+libsk_install_headers:
+	mkdir -p $(DESTDIR)/$(INCLUDEDIR)
+	cp -Rv $(LIBSK_ROOT)/include/* $(DESTDIR)/$(INCLUDEDIR)/
 
-install-libs: $(BINARIES)
-	mkdir -p $(DESTDIR)$(LIBDIR)
-	cp $(BINARIES) $(DESTDIR)$(LIBDIR)
+libsk_install_libs: $(LIBSK_BINARIES)
+	mkdir -p $(DESTDIR)/$(LIBDIR)
+	cp $(LIBSK_ROOT)/$(LIBSK_BINARIES) $(DESTDIR)/$(LIBDIR)
