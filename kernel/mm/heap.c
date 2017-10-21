@@ -137,7 +137,7 @@ k_return_t kheap_expand(kheap_t *heap, size_t size) {
         ASSERT(__check_kheap_integrity(heap));
         if (K_FAILED(res)) {
             // Allocation failed, free all previously allocated pages and return
-            while (i-- > pages_required) {
+            while (i-- > 0) {
                 kpage_free(cur_location);
                 cur_location -= kpaging_data.page_size;
             }
@@ -148,7 +148,7 @@ k_return_t kheap_expand(kheap_t *heap, size_t size) {
 
     // If KHEAP_ALIGN is set, align the starting block location
     if (heap->flags & KHEAP_ALIGN) {
-        block_location += block_location % heap->default_section_size;
+        block_location += heap->default_section_size - (block_location % heap->default_section_size);
     }
 
     // Create block
