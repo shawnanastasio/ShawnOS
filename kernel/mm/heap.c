@@ -55,7 +55,7 @@ void kheap_kalloc_install() {
     // For the critical heap, we set the max expand size to the page size squared.
     kheap_init(&kheap_critical, kpaging_data.page_size, KHEAP_ALIGN, kpaging_data.page_size * kpaging_data.page_size);
     // Initalize the critical heap with a single block of page size
-    ASSERT(kheap_expand(&kheap_critical, 1024) == K_SUCCESS);
+    ASSERT(kheap_expand(&kheap_critical, kpaging_data.page_size) == K_SUCCESS);
 
     kalloc_data.kalloc_malloc_real = __kheap_kalloc_malloc_real;
     kalloc_data.kalloc_free = __kheap_kalloc_free;
@@ -121,7 +121,7 @@ k_return_t kheap_expand(kheap_t *heap, size_t size) {
     }
 
     // Allocate pages
-    uintptr_t block_location = kpaging_data.highest_page+kpaging_data.page_size;
+    uintptr_t block_location = kpaging_data.highest_page;
     uintptr_t cur_location = kpaging_data.highest_page;
     kpaging_data.highest_page += pages_required * kpaging_data.page_size;
     
@@ -132,7 +132,7 @@ k_return_t kheap_expand(kheap_t *heap, size_t size) {
     }
 
     uint32_t i;
-    for (i=0; i<=pages_required; i++) {
+    for (i=0; i<pages_required; i++) {
         k_return_t res = kpage_allocate(cur_location, KPAGE_PRESENT | KPAGE_RW);
         ASSERT(__check_kheap_integrity(heap));
         if (K_FAILED(res)) {
@@ -146,9 +146,11 @@ k_return_t kheap_expand(kheap_t *heap, size_t size) {
         cur_location += kpaging_data.page_size;
     }
 
-    // If KHEAP_ALIGN is set, align the starting block location
-    if (heap->flags & KHEAP_ALIGN) {
-        block_location += heap->default_section_size - (block_location % heap->default_section_size);
+    // If KHEAP_ALIGN is set and we're not already aligned, align the starting block location
+    if (heap->flags & KHEAP_ALIGN && block_location % heap->default_section_size > 0) {
+        uintptr_t delta = heap->default_section_size - (block_location % heap->default_section_size);
+        block_location += delta;
+        block_size -= delta;
     }
 
     // Create block
