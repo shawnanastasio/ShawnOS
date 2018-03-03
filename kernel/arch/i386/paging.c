@@ -8,13 +8,16 @@
 #include <stdlib.h>
 
 #include <kernel/kernel.h>
+#include <mm/heap.h>
 #include <mm/paging.h>
 #include <mm/alloc.h>
+#include <mm/asa.h>
 #include <kernel/bitset.h>
 #include <arch/i386/mem.h>
 #include <arch/i386/isr.h>
 #include <arch/i386/multiboot.h>
 #include <arch/i386/paging.h>
+#include <arch/i386/pagepool.h>
 
 extern void load_page_dir(uint32_t *);
 extern void enable_paging();
@@ -23,6 +26,9 @@ extern uint32_t get_faulting_address();
 // Kernel mmu data
 // Contains kernel's page directory and tables
 i386_mmu_data_t i386_kernel_mmu_data;
+
+// Page pool for storing empty pages to use as page tables
+i386_pagepool_t pagepool;
 
 #define TABLE_IN_DIR(table, dir) ( (uint32_t *)((((uint32_t *)(dir))[(uint32_t)(table)]) & 0xFFFFF000) )
 
@@ -33,10 +39,10 @@ i386_mmu_data_t i386_kernel_mmu_data;
 k_return_t i386_mmu_data_init(i386_mmu_data_t *this) {
     uintptr_t tmp;
     uint32_t i;
-    
+
     // Allocate page directory
     tmp = (uintptr_t)kmalloc_a(sizeof(uint32_t) * 1024, KALLOC_CRITICAL);
-    if (!tmp) return -K_OOM;
+    if (!tmp) return K_OOM;
     this->page_directory = (uint32_t *)tmp;
 
     // Mark all page directory entries as not present
@@ -48,7 +54,7 @@ k_return_t i386_mmu_data_init(i386_mmu_data_t *this) {
     tmp = (uintptr_t)kmalloc_a(sizeof(uint32_t) * 1024, KALLOC_CRITICAL);
     if (!tmp) {
         kfree(this->page_directory);
-        return -K_OOM;
+        return K_OOM;
     }
     this->page_tables_virt = (uint32_t **)tmp;
 
@@ -58,7 +64,7 @@ k_return_t i386_mmu_data_init(i386_mmu_data_t *this) {
 
 void i386_paging_init() {
     uint32_t i;
-
+    k_return_t ret;
 
     // Allocate kernel paging data
     k_return_t res = i386_mmu_data_init(&i386_kernel_mmu_data);
@@ -67,9 +73,21 @@ void i386_paging_init() {
         PANIC("Unable to allocate kernel mmu data! Not enough RAM?");
     }
 
+    // Allocate page pool and fill all entries
+    i386_pagepool_init(&pagepool);
+    for (i=0; i<PAGEPOOL_ENTRIES; i++) {
+        uintptr_t tmp = i386_mem_kmalloc(PAGE_SIZE);
+        ASSERT(tmp && "Failed to allocate pages for i386 pagepool!");
+        ret = i386_pagepool_insert(&pagepool, tmp, tmp);
+        ASSERT(ret == K_SUCCESS && "Failed to insert i386 pagepool entry!");
+    }
+
     // Identity map from 0x0000 to the end of the kernel heap
-    for (i=0; i<=meminfo.kernel_heap_start + EARLY_HEAP_MAXSIZE; i += 0x1000) {
+    for (i=0; i<meminfo.kernel_heap_start + EARLY_HEAP_MAXSIZE; i += 0x1000) {
         i386_identity_map_page(&i386_kernel_mmu_data, i, PT_PRESENT | PT_RW, PD_PRESENT | PD_RW);
+        if (i > KVIRT_RESERVED) {
+            PANIC("Early i386 mem allocations grew past KVIRT_MAX");
+        }
     }
 
     // Install page fault handler
@@ -102,14 +120,16 @@ void i386_paging_init() {
     kpaging_data.kernel_end = meminfo.kernel_heap_curpos;
 
     // Set highest kernel-owned page
-    //kpaging_data.highest_page = ((kpaging_data.kernel_end + PAGE_SIZE) & 0xFFFFF000) + PAGE_SIZE;
-    kpaging_data.highest_page = meminfo.kernel_heap_start + EARLY_HEAP_MAXSIZE + PAGE_SIZE;
+    kpaging_data.highest_page = meminfo.kernel_heap_start + EARLY_HEAP_MAXSIZE;
+    ASSERT(kpaging_data.highest_page <= KVIRT_MAX);
 
     // Set page size
     kpaging_data.page_size = PAGE_SIZE;
 
     // Set total memory
     kpaging_data.mem_total = meminfo.mem_lower + meminfo.mem_upper;
+
+    i386_kernel_mmu_data.early_init_done = true;
 }
 
 
@@ -138,42 +158,132 @@ uint32_t i386_page_get_phys(i386_mmu_data_t *this, uint32_t address) {
     return page & 0xFFFFF000;
 }
 
+/**
+ * Allocate contiguous pages and map them.
+ * Used to obtain pages to refill the pagepool
+ */
+k_return_t i386_allocate_empty_pages(i386_mmu_data_t *this, uint32_t n_pages, uintptr_t *phys_out,
+                                     uintptr_t *virt_out) {
+    if (!this->early_init_done) {
+        // Early init not done, we can simply use the placement allocator
+        uintptr_t addr = (uintptr_t)kmalloc(n_pages * PAGE_SIZE, KALLOC_CRITICAL);
+        if (!addr) return K_OOM;
+
+        // Since we're in paging early init, physical and virtual addresses are the same
+        *phys_out = addr;
+        *virt_out = addr;
+        return K_SUCCESS;
+    } else {
+        // Early init is done, we'll need to grab the pages from ASA and then map them
+        // with i386_allocate_page
+        uintptr_t virt_addr;
+        uintptr_t phys_addr;
+        uint32_t i;
+        k_return_t ret;
+
+        // Grab virtual pages from ASA
+        virt_addr = (uintptr_t)asa_alloc(n_pages);
+        if (!virt_addr) return K_OOM;
+
+        // Map first the virtual page to physical memory and save the starting pointer
+        ret = i386_allocate_page(this, virt_addr, PT_PRESENT | PT_RW, PD_PRESENT | PD_RW, &phys_addr);
+        if (K_FAILED(ret)) {
+            asa_free((void * )virt_addr, n_pages);
+            return ret;
+        }
+
+        // Map the rest
+        for (i=1; i<n_pages; i++) {
+            ret = i386_allocate_page(this, virt_addr + (i * PAGE_SIZE), PT_PRESENT | PT_RW,
+                                     PD_PRESENT | PD_RW, NULL);
+            if (K_FAILED(ret)) {
+                asa_free((void *)virt_addr, n_pages);
+                while (i-- > 0) {
+                    i386_free_page(this, virt_addr + (i * PAGE_SIZE));
+                }
+                return ret;
+            }
+        }
+
+        *phys_out = phys_addr;
+        *virt_out = virt_addr;
+        return K_SUCCESS;
+    }
+}
 
 /**
  * Allocate a page at the specified address. Will overwrite any current page.
  * @param address virtual address that corresponds to page to allocate
  * @param pt_flags page table entry flags to be used
  * @param pd_flags page directory entry flags to be used if the page directory entry does not exist
- * @return the created page table entry
+ * @param[out] out ptr to place the physical address that the page was mapped to, or NULL to discard
+ * @return kernel return code
  */
-uint32_t i386_allocate_page(i386_mmu_data_t *this, uint32_t address, uint32_t pt_flags, uint32_t pd_flags) {
+k_return_t i386_allocate_page(i386_mmu_data_t *this, uint32_t address, uint32_t pt_flags, uint32_t pd_flags,
+                              uint32_t *out) {
     ASSERT(address % PAGE_SIZE == 0);
     uint32_t page_index = address / PAGE_SIZE;
     uint32_t table_index = page_index / 1024;
     uint32_t page_index_in_table = page_index % 1024;
     uint32_t page;
+    k_return_t ret;
 
     // Allocate a page frame
     uint32_t frame = i386_mem_allocate_frame();
-    ASSERT(frame);
+    if (!frame) return K_OOM;
     //printk_debug("Page at 0x%x will be mapped to phys 0x%x", address, frame*0x1000);
 
-    // Check if this table is present and allocate it if not
+    // Check if this table is present and allocate it from the pagepool if not
     if ((this->page_directory[table_index] & PD_PRESENT) == 0) {
-        printk_debug("Allocating new page table");
-        uintptr_t phys;
-        uint32_t *virt = (uint32_t *)kmalloc_ap(sizeof(uint32_t) * 1024, &phys, KALLOC_CRITICAL);
-        if (!virt || !phys) PANIC("Unable to allocate memory for page table!");
+        // Check if the pagepool needs to be refilled
+        if (pagepool.n_free <= PAGEPOOL_THRESHOLD && pagepool.enable_threshold_check) {
+            // Temporarily disable threshold check while we handle it
+            pagepool.enable_threshold_check = false;
 
-        this->page_directory[table_index] = phys | pd_flags;
-        this->page_tables_virt[table_index] = virt;
+            // Allocate PAGEPOOL_ENTRIES - PAGEPOOL_THRESHOLD new pages
+            uintptr_t new_phys, new_virt;
+            uint32_t n_pages = PAGEPOOL_ENTRIES - PAGEPOOL_THRESHOLD;
+            ret = i386_allocate_empty_pages(this, 1, &new_phys, &new_virt);
+            if (K_FAILED(ret)) return ret;
+            printk_debug("alloc empty pages got new phys: 0x%x virt: 0x%x", new_phys, new_virt); //sponge
+
+            // Insert new pages into pagepool
+            uint32_t i;
+            for(i=0;i<n_pages;i++) {
+                ret = i386_pagepool_insert(&pagepool, new_phys + (i * PAGE_SIZE), new_virt + (i * PAGE_SIZE));
+                if (K_FAILED(ret)) {
+                    PANIC("Failed to insert some new pages into pagepool!");
+                    break;
+                }
+            }
+
+            // Re-enable the threshold check
+            pagepool.enable_threshold_check = true;
+        }
+
+        i386_pagepool_entry_t entry;
+        ret = i386_pagepool_allocate(&pagepool, &entry);
+        if (K_FAILED(ret)) return ret;
+
+        // Wipe all entries (set to R/W, not present)
+        uint32_t i;
+        for (i=0; i<1024; i++) *((uint32_t *)entry.virt + i) = PT_RW;
+        //memset32((void *)entry.virt, PT_RW, 1024);
+        printk_debug("Pagepool returned phys: 0x%x virt: 0x%x", entry.phys, entry.virt); //sponge
+
+        this->page_directory[table_index] = entry.phys | pd_flags;
+        this->page_tables_virt[table_index] = (uint32_t *)entry.virt;
     }
 
     // Update page in page table
     page = (frame * PAGE_SIZE) | pt_flags;
     this->page_tables_virt[table_index][page_index_in_table] = page;
+    //printk_debug("provind phys out: 0x%x", (frame * PAGE_SIZE)); //sponge
+    if (out) {
+        *out = page & 0xFFFFF000;
+    }
 
-    return page;
+    return K_SUCCESS;
 }
 
 /**
@@ -190,7 +300,7 @@ k_return_t i386_free_page(i386_mmu_data_t *this, uint32_t address) {
 
     // Skip request if it's table does not have a Page Directory Entry
     if ((this->page_directory[table_index] & PD_PRESENT) == 0) {
-        return -K_INVALOP;
+        return K_INVALOP;
     }
 
     // Get page's physical frame address
@@ -218,15 +328,42 @@ uint32_t i386_identity_map_page(i386_mmu_data_t *this, uint32_t address, uint32_
     uint32_t table_index = page_index / 1024;
     uint32_t page_index_in_table = page_index % 1024;
     uint32_t page;
+    k_return_t ret;
 
     // Check if this table is present and allocate it if not
     if ((this->page_directory[table_index] & PD_PRESENT) == 0) {
-        uintptr_t phys;
-        uint32_t *virt = (uint32_t *)kmalloc_ap(sizeof(uint32_t) * 1024, &phys, KALLOC_CRITICAL);
-        if (!virt || !phys) PANIC("Unable to allocate memory for page table!");
-        
-        this->page_directory[table_index] = phys | pd_flags;
-        this->page_tables_virt[table_index] = virt;
+        // Check if the pagepool needs to be refilled
+        if (pagepool.n_free <= PAGEPOOL_THRESHOLD && pagepool.enable_threshold_check) {
+            // Temporarily disable threshold check while we handle it
+            pagepool.enable_threshold_check = false;
+
+            // Allocate PAGEPOOL_ENTRIES - PAGEPOOL_THRESHOLD new pages
+            uintptr_t new_phys, new_virt;
+            uint32_t n_pages = PAGEPOOL_ENTRIES - PAGEPOOL_THRESHOLD;
+            ret = i386_allocate_empty_pages(this, n_pages, &new_phys, &new_virt);
+            if (K_FAILED(ret)) return ret;
+
+            // Insert new pages into pagepool
+            uint32_t i;
+            for(i=0;i<n_pages;i++) {
+                ret = i386_pagepool_insert(&pagepool, new_phys + (i * PAGE_SIZE), new_virt + (i * PAGE_SIZE));
+                if (K_FAILED(ret)) {
+                    printk_debug("Only allocated %d out of %d pages.", i+1, n_pages);
+                    PANIC("Failed to insert some new pages into pagepool!");
+                    break;
+                }
+            }
+
+            // Re-enable the threshold check
+            pagepool.enable_threshold_check = true;
+        }
+
+        i386_pagepool_entry_t entry;
+        ret = i386_pagepool_allocate(&pagepool, &entry);
+        if (K_FAILED(ret)) return ret;
+
+        this->page_directory[table_index] = entry.phys | pd_flags;
+        this->page_tables_virt[table_index] = (uint32_t *)entry.virt;
     }
 
     // Update page in page table
@@ -243,9 +380,7 @@ uint32_t i386_identity_map_page(i386_mmu_data_t *this, uint32_t address, uint32_
  * Kernel paging interface functions. Should not be called directly
  */
 k_return_t __i386_kpage_allocate(uintptr_t addr, uint32_t flags) {
-    i386_allocate_page(&i386_kernel_mmu_data, addr, flags, flags);
-    // TODO: add actual error handling when paging fails
-    return K_SUCCESS;
+    return i386_allocate_page(&i386_kernel_mmu_data, addr, flags, flags, NULL);
 }
 
 k_return_t __i386_kpage_free(uintptr_t addr) {
@@ -255,7 +390,7 @@ k_return_t __i386_kpage_free(uintptr_t addr) {
 k_return_t __i386_kpage_identity_map(uintptr_t addr, uint32_t flags) {
     uint32_t tmp = i386_identity_map_page(&i386_kernel_mmu_data, addr, flags, flags);
     if (tmp) return K_SUCCESS;
-    return -K_OOM;
+    return K_OOM;
 }
 
 uintptr_t __i386_kpage_get_phys(uintptr_t addr) {

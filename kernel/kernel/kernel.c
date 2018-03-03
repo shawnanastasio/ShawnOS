@@ -19,6 +19,7 @@
 #include <mm/heap.h>
 #include <mm/paging.h>
 #include <mm/alloc.h>
+#include <mm/asa.h>
 
 /* Driver includes */
 #include <drivers/vga/textmode.h>
@@ -39,8 +40,6 @@
 #include <arch/i386/mem.h>
 #include <arch/i386/paging.h>
 
-extern struct idt_entry idt[256];
-
 void kernel_early(uint32_t mboot_magic, multiboot_info_t *mboot_header) {
     // Set up kernel terminal for early output
     //kernel_terminal_init(14);
@@ -59,6 +58,10 @@ void kernel_early(uint32_t mboot_magic, multiboot_info_t *mboot_header) {
     printk_debug("IDT Installed!");
     i386_mem_init(mboot_header);
     printk_debug("Memory Allocation functions enabled!");
+
+    // Init Address Space Allocator before enabling paging
+    ASSERT(asa_init(PAGE_SIZE) == K_SUCCESS);
+
     i386_paging_init();
     printk_debug("Paging enabled!");
 
@@ -101,20 +104,50 @@ void kernel_main() {
     }
     */
 
+    //kernel_thread_sleep(10);
+
     printf("Heap start: 0x%x\n", meminfo.kernel_heap_start);
     printf("Heap curpos: 0x%x\n", meminfo.kernel_heap_curpos);
     printf("kHighest page: 0x%x\n", kpaging_data.highest_page);
-    
-#if 1
+
+    asa_alloc(1000);
+    uintptr_t phys, virt;
+    k_return_t ret = i386_allocate_empty_pages(&i386_kernel_mmu_data, 1, &phys, &virt);
+    ASSERT(!K_FAILED(ret));
+    printk_debug("i386_a_e_p returned phys: 0x%x virt: 0x%x", phys, virt);
+
     for (;;) {
-        uint32_t tmp = (uint32_t)kmalloc(0x10000, 0);
+        void *tmp = asa_alloc(1);
+        if (!tmp) {
+            PANIC("Out of address space!");
+        }
+        ret = i386_allocate_page(&i386_kernel_mmu_data, (uint32_t)tmp,
+            PT_PRESENT | PT_RW, PD_PRESENT | PD_RW, NULL);
+        if (K_FAILED(ret)) {
+            PANIC("FAILED TO ALLOCATE PAGE!");
+        }
+    }
+#if 0
+    for (;;) {
+        uint32_t tmp = (uint32_t)kmalloc(0x999, KALLOC_GENERAL);
+        if (!tmp) {printk_debug("REEEEE"); break;}
         tmp = tmp;
-        memset((void *)tmp, 0xFF, 0x10000);
+        //printk_debug("writing ff to 0x%x", tmp);
+        //memset((void *)tmp, 0xFF, 0x1000);
+        //kfree((void*)tmp);
         //printk_debug("Got 0x10000 bytes at 0x%x", tmp);
     }
 #endif
 
-    //for(;;);
+    for (;;) {
+        // Stress ASA
+        void *tmp = asa_alloc(1);
+        if (!tmp) {
+            PANIC("GOOD: ASA returned NULL");
+        }
+    }
+
+    for(;;);
 }
 
 /**

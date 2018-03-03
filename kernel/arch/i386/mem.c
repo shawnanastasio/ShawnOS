@@ -99,7 +99,7 @@ void _i386_mem_init_bitset() {
 }
 
 /**
- * Allocates a frame and returns it's index
+ * Allocates a frame and returns its index
  * @return index of allocated frame
  */
 inline uint32_t i386_mem_allocate_frame() {
@@ -317,14 +317,14 @@ void i386_mem_kfree(uintptr_t tmp) {
 uintptr_t i386_mem_kmalloc_real(uint32_t size, uintptr_t *phys, uint32_t flags) {
     // We only handle critical allocations this early on
     if (!(flags & KALLOC_CRITICAL)) {
-        return 0;     
+        return 0;
     }
     // Make sure we haven't exhausted our heap
     //ASSERT(size + meminfo.kernel_heap_curpos + PAGE_SIZE <
     //        meminfo.kernel_heap_start + EARLY_HEAP_MAXSIZE);
 
     // Return 0 if we're out of memory
-    if (size + meminfo.kernel_heap_curpos + PAGE_SIZE > 
+    if (size + meminfo.kernel_heap_curpos + PAGE_SIZE >
         meminfo.kernel_heap_start + EARLY_HEAP_MAXSIZE) {
 
         return 0;
