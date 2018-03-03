@@ -52,7 +52,7 @@ struct kpaging_interface {
     // Virtual memory address that the kernel ends at
     uintptr_t kernel_end;
 
-    // Virtual memory address of the highest page owned by the kernel
+    // Virtual memory address of the first contiguous page not owned by the kernel
     uintptr_t highest_page;
 
     // Size of pages

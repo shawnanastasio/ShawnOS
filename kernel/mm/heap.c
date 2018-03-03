@@ -12,16 +12,14 @@
 #include <kernel/bitset.h>
 #include <mm/paging.h>
 #include <mm/alloc.h>
-
 #include <mm/heap.h>
+#include <mm/asa.h>
 
 // Default kheap for kernel general allocations
 kheap_t kheap_default;
 
-// Critical kheap for kernel critical allocations (paging system, etc.)
-kheap_t kheap_critical;
-
 static inline bool __check_kheap_integrity(kheap_t *heap) {
+#ifdef KHEAP_DEBUG
     kheap_block_t *cur = heap->first;
     while (cur) {
         if (cur->magic != BLOCK_MAGIC || (cur->next && cur->next->magic != BLOCK_MAGIC)) {
@@ -31,15 +29,19 @@ static inline bool __check_kheap_integrity(kheap_t *heap) {
         cur = cur->next;
     }
     return true;
+#else
+    heap = heap;
+    return true;
+#endif
 }
 
-void kheap_init(kheap_t *heap, uint32_t default_section_size, uint32_t flags, size_t max_expand_size) {
+void kheap_init(kheap_t *heap, uint32_t default_section_size, uint32_t min_block_size,
+                uint32_t flags) {
     heap->first = NULL;
     heap->default_section_size = default_section_size;
+    heap->min_block_size = min_block_size;
     heap->flags = flags;
     heap->effective_size = 0;
-    heap->max_expand_size = max_expand_size;
-    heap->cur_expand_size = 0;
     heap->total_free_sections = 0;
 }
 
@@ -48,14 +50,8 @@ void kheap_init(kheap_t *heap, uint32_t default_section_size, uint32_t flags, si
  */
 void kheap_kalloc_install() {
     // Initalize the default heap
-    // TODO: Use a better metric to determine the heap max expand size. Currently set to 1MB.
-    size_t max_expand_size = 1024 * 1024;
-    kheap_init(&kheap_default, SECTION_SIZE_DEFAULT, KHEAP_AUTO_EXPAND, max_expand_size);
-
-    // For the critical heap, we set the max expand size to the page size squared.
-    kheap_init(&kheap_critical, kpaging_data.page_size, KHEAP_ALIGN, kpaging_data.page_size * kpaging_data.page_size);
-    // Initalize the critical heap with a single block of page size
-    ASSERT(kheap_expand(&kheap_critical, kpaging_data.page_size) == K_SUCCESS);
+    kheap_init(&kheap_default, SECTION_SIZE_DEFAULT, MIN_BLOCK_SIZE_DEFAULT,
+               KHEAP_AUTO_EXPAND);
 
     kalloc_data.kalloc_malloc_real = __kheap_kalloc_malloc_real;
     kalloc_data.kalloc_free = __kheap_kalloc_free;
@@ -78,24 +74,11 @@ static inline void _kheap_print(kheap_t *heap) {
 }
 
 /**
- * Internal function to automatically expand kernel heaps with the KHEAP_AUTO_EXPAND flag set.
- * @return K_SUCCESS
- */ 
-//k_return_t __kheap_auto_expand(kheap_t *heap) {
-
-//}
-
-/**
  * Expand the heap to accommodate a block of the specified size
  * @param heap kheap object to act on
  * @param size minimum size of allocatable memory in block
  */
 k_return_t kheap_expand(kheap_t *heap, size_t size) {
-    // If this heap has KHEAP_ALIGN set, increase the size by section_size
-    if (heap->flags & KHEAP_ALIGN) {
-        size += heap->default_section_size;     
-    }
-
     // Calculate number of pages required to meet this size
     uintptr_t pages_required = DIV_ROUND_UP(size, kpaging_data.page_size);
     // Make sure we have enough space for metadata too
@@ -115,42 +98,27 @@ k_return_t kheap_expand(kheap_t *heap, size_t size) {
     }
     block_size = pages_required * kpaging_data.page_size;
 
-    //sponge
-    if (heap == &kheap_critical) {
-        printk_debug("picked block size %d for min allocatable size of %d", block_size, size);
+    // Allocate virtual pages from ASA
+    uintptr_t block_location = (uintptr_t)asa_alloc(pages_required);
+    if (!block_location) {
+        printk_debug("ASA Alloc failed!");
+        return K_OOM;
     }
 
-    // Allocate pages
-    uintptr_t block_location = kpaging_data.highest_page;
-    uintptr_t cur_location = kpaging_data.highest_page;
-    kpaging_data.highest_page += pages_required * kpaging_data.page_size;
-    
-    if ((uintptr_t)heap == (uintptr_t)&kheap_critical) {
-        printk_debug("newcritb from: 0x%x to 0x%x", cur_location, kpaging_data.highest_page);
-    } else {
-        printk_debug("newblock from: 0x%x to 0x%x", cur_location, kpaging_data.highest_page);
-    }
-
+    // Map virtual pages
+    k_return_t ret;
     uint32_t i;
     for (i=0; i<pages_required; i++) {
-        k_return_t res = kpage_allocate(cur_location, KPAGE_PRESENT | KPAGE_RW);
-        ASSERT(__check_kheap_integrity(heap));
-        if (K_FAILED(res)) {
+        ret = kpage_allocate(block_location + (i * kpaging_data.page_size), KPAGE_PRESENT | KPAGE_RW);
+        if (K_FAILED(ret)) {
             // Allocation failed, free all previously allocated pages and return
+            asa_free((void *)block_location, pages_required);
             while (i-- > 0) {
-                kpage_free(cur_location);
-                cur_location -= kpaging_data.page_size;
+                kpage_free(block_location + (i * kpaging_data.page_size));
             }
-            return -K_OOM;
+            printk_debug("map failed!");
+            return K_OOM;
         }
-        cur_location += kpaging_data.page_size;
-    }
-
-    // If KHEAP_ALIGN is set and we're not already aligned, align the starting block location
-    if (heap->flags & KHEAP_ALIGN && block_location % heap->default_section_size > 0) {
-        uintptr_t delta = heap->default_section_size - (block_location % heap->default_section_size);
-        block_location += delta;
-        block_size -= delta;
     }
 
     // Create block
@@ -158,8 +126,7 @@ k_return_t kheap_expand(kheap_t *heap, size_t size) {
     return K_SUCCESS;
 }
 
-void kheap_add_block(kheap_t *heap, uintptr_t addr, size_t block_size,
-                     uint32_t section_size) {
+void kheap_add_block(kheap_t *heap, uintptr_t addr, size_t block_size, uint32_t section_size) {
     // Start address must be page aligned for now
     ASSERT(addr % 0x1000 == 0);
 
@@ -186,7 +153,9 @@ void kheap_add_block(kheap_t *heap, uintptr_t addr, size_t block_size,
     block->block_size = block_size;
     block->section_size = section_size;
     block->start = addr;
+#ifdef KHEAP_DEBUG
     block->magic = BLOCK_MAGIC;
+#endif
     // Create used_sections bitset
     bitset_init(&block->used_sections, used_bitset_start, bitset_length);
     // Create delimiter bitset
@@ -195,16 +164,13 @@ void kheap_add_block(kheap_t *heap, uintptr_t addr, size_t block_size,
     // Mark first sections as reserved in used bitset
     // (header + used bitset + delimiter bitset)
     uint32_t reserved = DIV_ROUND_UP((sizeof(kheap_block_t) + (bitset_size*2)), section_size);
-    //sponge
-    if (heap == &kheap_critical) {
-        printk_debug("num reserved sections: %d", reserved);
-        printk_debug("bitset len: %d", bitset_length);
-    }
     uint32_t i;
     for (i=0; i<reserved; i++) {
         bitset_set_bit(&block->used_sections, i);
     }
     block->free_sections = bitset_length - reserved;
+    block->first_free_section = reserved;
+
     heap->total_free_sections += bitset_length - reserved;
 
     // Increase heap's effective size
@@ -215,33 +181,20 @@ void kheap_add_block(kheap_t *heap, uintptr_t addr, size_t block_size,
     heap->first = block;
 }
 
-/**
- * Kernel alloc interface function to allocate memory
- * Redirects to kheap_malloc
+/*
+ * Wrapper functions to conform to standard interfaces
  */
 uintptr_t __kheap_kalloc_malloc_real(size_t size, uintptr_t *phys, uint32_t flags) {
+    k_return_t ret;
     uintptr_t res;
-    kheap_t *heap;
 
-    if (flags & KALLOC_CRITICAL) {
-        heap = &kheap_critical;
+    ret = kheap_malloc(&kheap_default, size,
+                       (flags & KALLOC_PAGE_ALIGN) ? kpaging_data.page_size : 0, &res);
 
-        // If the critical heap is at >=90% usage, we should increase it by 
-        // pagesize * 128 bytes.
-        printk_debug("TODO: Expand critical heap");
-
-    } else {
-        heap = &kheap_default;
+    if (K_FAILED(ret)) {
+        PANIC("kheap OOM!");
     }
 
-    // Handle allocation
-    if (flags & KALLOC_PAGE_ALIGN) {
-        res = kheap_malloc(heap, size, kpaging_data.page_size, flags);
-    } else {
-        res = kheap_malloc(heap, size, 0, flags);
-    }
-
-    // Handle physical address output
     if (phys) {
         *phys = kpage_get_phys(res);
     }
@@ -249,133 +202,129 @@ uintptr_t __kheap_kalloc_malloc_real(size_t size, uintptr_t *phys, uint32_t flag
     return res;
 }
 
-/**
- * Kernel alloc interface function to free allocated memory
- * Redirects to kheap_free
- */
 void __kheap_kalloc_free(uintptr_t addr) {
     kheap_free(&kheap_default, addr);
 }
 
-uintptr_t kheap_malloc(kheap_t *heap, size_t size, size_t align, uint32_t flags) {
+k_return_t kheap_malloc(kheap_t *heap, size_t size, size_t align, uintptr_t *out) {
+#ifdef KHEAP_DEBUG
     ASSERT(__check_kheap_integrity(heap));
-    size_t original_size = size;
+#endif
+
     bool manual_align = false;
+    k_return_t ret;
+
     // Handle alignment
     if (align > 0) {
-        // If KHEAP_ALIGN isn't enabled or the given amount isn't equal to the section size,
-        // manually align the allocation.
-        if ((heap->flags & KHEAP_ALIGN) == 0 || heap->default_section_size != align) {
+        // If the given amount isn't equal to the section size, manually align the allocation.
+        if (heap->default_section_size != align) {
             size += align;
             manual_align = true;
         }
     }
-    
+
     // Iterate through heap linked list until we find a block with
     // enough contiguous sections to satisfy requested size
     kheap_block_t *cur = heap->first;
-    
+
+    // If the heap is empty, add an initial block
+    if (!cur) {
+        ret = kheap_expand(heap, MAX(heap->min_block_size, size));
+        if (K_FAILED(ret)) {
+            return ret;
+        }
+        cur = heap->first;
+    }
+
     uint32_t block_no_dbg;
     for (block_no_dbg = 0; cur; block_no_dbg++) {
         //printf("Checking block at 0x%x\n", (uintptr_t)cur);
         // See if block is big enough
         uint32_t max_free_space = cur->block_size - sizeof(kheap_block_t) -
-                              (cur->delimiters.length / 32) * 8 - (cur->used_sections.length / 32) * 8;
-
-        //sponge
-        if (heap == &kheap_critical) {
-            printk_debug("crit free space: %d, requested: %d", max_free_space, size);
-        }
+                              (cur->delimiters.length / 32) * 4 - (cur->used_sections.length / 32) * 4;
 
         // Calculate number of sections required
         uint32_t n_sec = DIV_ROUND_UP(size, cur->section_size);
-
-
         if (size > max_free_space || n_sec > cur->free_sections) {
             goto skip_block;
         }
 
-        
-        uint32_t i, j;
-        for (i=0; i<cur->used_sections.length; i++) {
+        uint32_t i, j, k;
+        uint32_t first_free = 0;
+        uint32_t continuous_pages = 0;
+        for (k=0; k<cur->used_sections.length; k++) {
+            // Calculate the actual index based off of the first free section
+            i = (cur->first_free_section + k) % cur->used_sections.length;
             if (!bitset_get_bit(&cur->used_sections, i)) {
-                // Found empty section, see if we have n_sec-1 free after it
-                bool found = true;
-                for (j=i+1; j<i+n_sec; j++) {
-                    if (j >= cur->used_sections.length ||
-                        bitset_get_bit(&cur->used_sections, j)) {
-
-                        // Not enough space
-                        found = false;
-                        break;
-                    }
+                if (i < first_free) {
+                    // Wrapped around, unset continuous flag
+                    continuous_pages = 0;
+                } else if (continuous_pages == 0) {
+                    first_free = i;
                 }
-                if (found) {
-                    //sponge
-                    if (heap == &kheap_critical) {
-                        printk_debug("found free from sec %d to %d in block %d", i, i+n_sec-1, block_no_dbg);
-                    }
 
-                    uintptr_t section_start = ((uintptr_t)cur)+(i * cur->section_size);
+                ++continuous_pages;
+
+                // Check if we have accumulated n_sec free pages
+                if (continuous_pages == n_sec) {
+                    uintptr_t section_start = ((uintptr_t)cur)+(first_free * cur->section_size);
                     // Mark sections as allocated
-                    for (j=i; j<i+n_sec; j++) {
-                        bitset_set_bit(&cur->used_sections, j);
+                    uint32_t end = first_free + n_sec;
+                    for (j=first_free; j<first_free+n_sec;) {
+                        if (j % 32 == 0 && j + 32 < end) {
+                            cur->used_sections.start[j / 32] = 0xFFFFFFFF;
+                            j += 32;
+                        } else {
+                            bitset_set_bit(&cur->used_sections, j);
+                            ++j;
+                        }
                     }
 
-                    // Mark first and last section in delimiter bitset
-                    bitset_set_bit(&cur->delimiters, i);
-                    bitset_set_bit(&cur->delimiters, i+n_sec-1);
+                    // Mark last section in delimiter bitset
+                    bitset_set_bit(&cur->delimiters, first_free+n_sec-1);
 
                     // Align the address if requested
                     if (manual_align && section_start % align > 0) {
                         section_start += align - (section_start % align);
                     }
-                    
+
                     // Decrease this block's free section count
                     cur->free_sections -= n_sec;
                     heap->total_free_sections -= n_sec;
 
+                    // Set the first free section to the end of the allocation
+                    cur->first_free_section = first_free + n_sec;
+
                     // Return the starting address of the allocation
-                    return section_start;
+                    *out = section_start;
+                    return K_SUCCESS;
                 }
+            } else {
+                continuous_pages = 0;
             }
         }
 
     skip_block:
-        //sponge
+#ifdef KHEAP_DEBUG
         if (cur->next && cur->next->magic != BLOCK_MAGIC) {
             printk_debug("Next block 0x%x has invalid magic: 0x%x", (uint32_t)cur->next, cur->next->magic);
-            printk_debug("next u32: 0x%x", (uint32_t)(((uint32_t *)cur->next->magic)+2));
             PANIC("");
         }
+#endif
         cur = cur->next;
-    }
 
-    // Not enough memory in heap, if KHEAP_AUTO_EXPAND is set, try expanding the heap
-    if ((heap->flags & KHEAP_AUTO_EXPAND) == 0) {
-        return 0;
-    }
-
-    if (heap->cur_expand_size < heap->max_expand_size) {
-        // The heap's current expand size can be increased
-        // Use the current heap size + the size of the new allocation
-        // as the new expand size unless it's too big
-        if (heap->effective_size + size < heap->max_expand_size) {
-            heap->cur_expand_size = heap->effective_size + size;
-        } else {
-            heap->cur_expand_size = heap->max_expand_size;
+        if (!cur) {
+            // Reached end of heap, expand it
+            ret = kheap_expand(heap, MAX(heap->min_block_size, size));
+            if (K_FAILED(ret)) {
+                return ret;
+            }
+            cur = heap->first;
         }
     }
 
-    //printk_debug("expanding heap by %u bytes", heap->cur_expand_size);
-    //kernel_thread_sleep(2);
-
-    k_return_t res = kheap_expand(heap, heap->cur_expand_size);
-    if (res >= 0) {
-        return kheap_malloc(heap, original_size, align, flags);
-    } else {
-        return 0;
-    }
+    // If we got here, there's not enough memory in the heap to satisfy the allocation
+    return K_OOM;
 }
 
 
@@ -394,20 +343,13 @@ bool kheap_free(kheap_t *heap, uintptr_t addr) {
             // Provided section number
             uint32_t sect_num = (addr - cur->start) / cur->section_size;
 
+            // Make sure the given address is actually allocated
+            ASSERT(bitset_get_bit(&cur->used_sections, sect_num));
+
             // Go through delimiters bitset until we find the
-            // the first and last section of the allocation
-            uint32_t i, first_section = 0, last_section = 0;
-            
-            // First section
-            for (i=sect_num; i > 0; i--) {
-                if (bitset_get_bit(&cur->delimiters, i)) {
-                    // Found the first delimiter, clear it and break
-                    bitset_clear_bit(&cur->delimiters, i);
-                    first_section = i;
-                    break;
-                }
-            }
-            
+            // the last section of the allocation
+            uint32_t i, last_section = 0;
+
             // Last section
             for (i=sect_num; i < cur->delimiters.length; i++) {
                 if (bitset_get_bit(&cur->delimiters, i)) {
@@ -420,15 +362,19 @@ bool kheap_free(kheap_t *heap, uintptr_t addr) {
 
             // Make sure we found the delimiters
             // TODO: replace assert once debugging is done
-            ASSERT(first_section);
             ASSERT(last_section);
 
             // Clear the sections in the used_sections bitset
-            for (i=first_section; i <= last_section; i++) {
+            for (i=sect_num; i <= last_section; i++) {
                 bitset_clear_bit(&cur->used_sections, i);
             }
 
-            //printk_debug("Cleared %u sections", last_section-first_section+1);
+            // Update the first free section for this block
+            cur->first_free_section = sect_num;
+
+            // Update heap/block metadata
+            cur->free_sections += last_section - sect_num + 1;
+            heap->total_free_sections += last_section - sect_num + 1;
             return true;
         }
 
