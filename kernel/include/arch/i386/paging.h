@@ -16,6 +16,7 @@
 #define PD_RW (1<<1)
 #define PD_USER (1<<2)
 #define PD_WRITETHROUGH (1<<3)
+#define PD_DISABLECACHE (1<<4)
 
 // Page Fault error flags
 #define PF_PRESENT (1<<0)      // Was the page present?
@@ -24,35 +25,18 @@
 #define PF_RESERVED (1<<3)     // Were the CPU-reserved bytes overwritten?
 #define PF_ID (1<<4)           // Was the fault caused by an instruction fetch?
 
+// A beautiful macro to access the physical address of a page table in a given page directory
+#define TABLE_IN_DIR(table, dir) ( (uint32_t)((((uint32_t *)(dir))[(uint32_t)(table)]) & 0xFFFFF000) )
+
 /**
  * Struct containing per-process mmu/paging data.
  * Includes page directory, page tables, etc.
  */
 struct i386_mmu_data {
     /**
-     * i386 page directory. Contains 1024 page tables.
+     * Physical address of pointer to i386 page directory. Contains 1024 page tables.
      */
-    uint32_t *page_directory;
-
-    /**
-     * Virtual addresses of page tables. Indices correspond 1-1 with page directory.
-     * Entries contain physical addresses of page tables
-     *
-     * Ex. To access the first page in the second page table, do the following:
-     * page_tables_virt[2][1]
-     */
-    uint32_t **page_tables_virt;
-
-    /**
-     * Bool representing whether or not early paging init is done.
-     * Should be used to determine which virtual allocator to use.
-     * Set to true at end of i386_paging_init.
-     *
-     * When false, new virtual pages can simply be obtained by the i386 mem placement
-     * allocator. Otherwise, the kernel ASA + i386_allocate_page should be used
-     * to obtain a valid virtual page with a physical mapping.
-     */
-    bool early_init_done;
+    uint32_t page_directory;
 };
 typedef struct i386_mmu_data i386_mmu_data_t;
 

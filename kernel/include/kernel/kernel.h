@@ -95,7 +95,7 @@ max_impl_custom(unsigned long long, ulonglong)
  */
 
 /* Memory up to this address is reserved for early init and will be identity mapped */
-#define KVIRT_RESERVED 0x179000
+#define KVIRT_RESERVED 0x17c000
 
 /* Maximum kernel virtual address */
 #define KVIRT_MAX 0x3FFFFFFF

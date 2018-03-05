@@ -11,7 +11,7 @@
  * Data structure containing function pointers to currently installed paging
  * system
  */
-kpaging_interface_t kpaging_data;
+kpaging_data_t kpaging_data;
 
 /**
  * Allocate a page using the installed paging system
@@ -21,9 +21,9 @@ kpaging_interface_t kpaging_data;
  */
 k_return_t kpage_allocate(uintptr_t addr, uint32_t flags) {
     // Make sure that the function is installed
-    ASSERT(kpaging_data.kpage_allocate);
+    ASSERT(kpaging_data.interface->kpage_allocate);
 
-    return kpaging_data.kpage_allocate(addr, flags);
+    return kpaging_data.interface->kpage_allocate(addr, flags);
 }
 
 /**
@@ -33,9 +33,9 @@ k_return_t kpage_allocate(uintptr_t addr, uint32_t flags) {
  */
 k_return_t kpage_free(uintptr_t addr) {
     // Make sure that the function is installed
-    ASSERT(kpaging_data.kpage_free);
+    ASSERT(kpaging_data.interface->kpage_free);
 
-    return kpaging_data.kpage_free(addr);
+    return kpaging_data.interface->kpage_free(addr);
 }
 
 /**
@@ -46,14 +46,14 @@ k_return_t kpage_free(uintptr_t addr) {
  */
 k_return_t kpage_identity_map(uintptr_t addr, uint32_t flags) {
     // Make sure that the function is installed
-    ASSERT(kpaging_data.kpage_identity_map);
+    ASSERT(kpaging_data.interface->kpage_identity_map);
 
-    return kpaging_data.kpage_identity_map(addr, flags);
+    return kpaging_data.interface->kpage_identity_map(addr, flags);
 }
 
 uintptr_t kpage_get_phys(uintptr_t addr) {
     // Make sure that the function is installed
-    ASSERT(kpaging_data.kpage_get_phys);
+    ASSERT(kpaging_data.interface->kpage_get_phys);
 
-    return kpaging_data.kpage_get_phys(addr);
+    return kpaging_data.interface->kpage_get_phys(addr);
 }

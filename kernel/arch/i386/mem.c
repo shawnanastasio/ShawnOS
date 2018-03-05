@@ -143,7 +143,7 @@ uint32_t i386_mem_get_next_free_frame() {
     }
 
     // No free frames were found
-    printk_debug("Out of memory!");
+    printk_debug("i386_mem: Out of memory!");
     return 0;
 }
 
@@ -211,6 +211,8 @@ uint8_t _i386_mmap_check_reserved(uint32_t addr) {
  * Debug function to print out reserved memory regions to the screen
  */
 void _i386_print_reserved() {
+    printf("[mem] kernel reserved start: 0x%x end: 0x%x\n", meminfo.kernel_reserved_start, meminfo.kernel_reserved_end);
+
     // Print out mem_lower and mem_upper
     printf("[mem] mem_lower: %u, mem_upper: %u, mem_total: %u\n",
             meminfo.mem_lower, meminfo.mem_upper, meminfo.mem_lower + meminfo.mem_upper);

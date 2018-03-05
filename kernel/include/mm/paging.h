@@ -45,6 +45,12 @@ struct kpaging_interface {
      * @return physical address corresponding to virutal address, or 0 if none
      */
     uintptr_t (*kpage_get_phys)(uintptr_t addr);
+};
+typedef struct kpaging_interface kpaging_interface_t;
+
+struct kpaging_data {
+    // Currently installed paging functions to use
+    const kpaging_interface_t *interface;
 
     // Virtual memory address that the kernel starts at
     uintptr_t kernel_start;
@@ -61,9 +67,9 @@ struct kpaging_interface {
     // Total amount of system memory in kilobytes
     size_t mem_total;
 };
-typedef struct kpaging_interface kpaging_interface_t;
+typedef struct kpaging_data kpaging_data_t;
 
-extern kpaging_interface_t kpaging_data;
+extern kpaging_data_t kpaging_data;
 
 void kpage_init();
 k_return_t kpage_allocate(uintptr_t addr, uint32_t flags);

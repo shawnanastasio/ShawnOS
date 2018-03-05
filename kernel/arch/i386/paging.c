@@ -17,46 +17,54 @@
 #include <arch/i386/isr.h>
 #include <arch/i386/multiboot.h>
 #include <arch/i386/paging.h>
-#include <arch/i386/pagepool.h>
 
 extern void load_page_dir(uint32_t *);
 extern void enable_paging();
 extern uint32_t get_faulting_address();
+extern void invlpg(void *);
+extern void flush_tlb();
 
 // Kernel mmu data
 // Contains kernel's page directory and tables
 i386_mmu_data_t i386_kernel_mmu_data;
 
-// Page pool for storing empty pages to use as page tables
-i386_pagepool_t pagepool;
+// A virtual page whose physical address mapping can be changed freely
+// Used to access page tables from their physical address
+static uint32_t *WINDOW_PAGE = NULL;
 
-#define TABLE_IN_DIR(table, dir) ( (uint32_t *)((((uint32_t *)(dir))[(uint32_t)(table)]) & 0xFFFFF000) )
+// Kernel paging interface implementation
+const kpaging_interface_t i386_paging_interface = {
+    .kpage_allocate = __i386_kpage_allocate,
+    .kpage_free = __i386_kpage_free,
+    .kpage_identity_map = __i386_kpage_identity_map,
+    .kpage_get_phys = __i386_kpage_get_phys,
+};
+
+/**
+ * Bool representing whether or not early paging init is done.
+ * Should be used to determine which virtual allocator to use.
+ * Set to true at end of i386_paging_init.
+ *
+ * When false, new pages can simply be obtained by the i386 mem placement
+ * allocator. Otherwise, the i386 page frame allocator + WINDOW_PAGE should be used
+ * to obtain a valid physical page and a way to write to it.
+ */
+bool early_init_done = false;
 
 /**
  * Initalize an empty i386_paging_data struct.
  * Must be called before the struct is used.
  */
 k_return_t i386_mmu_data_init(i386_mmu_data_t *this) {
-    uintptr_t tmp;
-    uint32_t i;
+    uint32_t *tmp;
 
     // Allocate page directory
-    tmp = (uintptr_t)kmalloc_a(sizeof(uint32_t) * 1024, KALLOC_CRITICAL);
+    tmp = (uint32_t *)kmalloc_a(sizeof(uint32_t) * 1024, KALLOC_CRITICAL);
     if (!tmp) return K_OOM;
-    this->page_directory = (uint32_t *)tmp;
+    this->page_directory = (uint32_t)tmp;
 
     // Mark all page directory entries as not present
-    for (i=0; i<1024; i++) {
-        this->page_directory[i] = PD_RW;
-    }
-
-    // Allocate virtual page table list
-    tmp = (uintptr_t)kmalloc_a(sizeof(uint32_t) * 1024, KALLOC_CRITICAL);
-    if (!tmp) {
-        kfree(this->page_directory);
-        return K_OOM;
-    }
-    this->page_tables_virt = (uint32_t **)tmp;
+    memset32(tmp, PD_RW, 1024);
 
     return K_SUCCESS;
 }
@@ -67,23 +75,14 @@ void i386_paging_init() {
     k_return_t ret;
 
     // Allocate kernel paging data
-    k_return_t res = i386_mmu_data_init(&i386_kernel_mmu_data);
-    if (K_FAILED(res)) {
+    ret = i386_mmu_data_init(&i386_kernel_mmu_data);
+    if (K_FAILED(ret)) {
         // If we don't have enough memory to allocate the kernel mmu data, panic
         PANIC("Unable to allocate kernel mmu data! Not enough RAM?");
     }
 
-    // Allocate page pool and fill all entries
-    i386_pagepool_init(&pagepool);
-    for (i=0; i<PAGEPOOL_ENTRIES; i++) {
-        uintptr_t tmp = i386_mem_kmalloc(PAGE_SIZE);
-        ASSERT(tmp && "Failed to allocate pages for i386 pagepool!");
-        ret = i386_pagepool_insert(&pagepool, tmp, tmp);
-        ASSERT(ret == K_SUCCESS && "Failed to insert i386 pagepool entry!");
-    }
-
-    // Identity map from 0x0000 to the end of the kernel heap
-    for (i=0; i<meminfo.kernel_heap_start + EARLY_HEAP_MAXSIZE; i += 0x1000) {
+    // Identity map from 0x0000 to the end of KVIRT_RESERVED
+    for (i=0; i<KVIRT_RESERVED; i += 0x1000) {
         i386_identity_map_page(&i386_kernel_mmu_data, i, PT_PRESENT | PT_RW, PD_PRESENT | PD_RW);
         if (i > KVIRT_RESERVED) {
             PANIC("Early i386 mem allocations grew past KVIRT_MAX");
@@ -94,24 +93,15 @@ void i386_paging_init() {
     isr_install_handler(14, __i386_page_fault_handler);
 
     // Enable paging
-    load_page_dir(i386_kernel_mmu_data.page_directory);
+    load_page_dir((uint32_t *)i386_kernel_mmu_data.page_directory);
     enable_paging();
 
     /**
      * Install paging functions into kernel paging interface
      */
 
-    // Install kpage_allocate
-    kpaging_data.kpage_allocate = __i386_kpage_allocate;
-
-    // Install kpage_free
-    kpaging_data.kpage_free = __i386_kpage_free;
-
-    // Install kpage_identity_map
-    kpaging_data.kpage_identity_map = __i386_kpage_identity_map;
-
-    // Install kpage_get_phys
-    kpaging_data.kpage_get_phys = __i386_kpage_get_phys;
+    // Install functions
+    kpaging_data.interface = &i386_paging_interface;
 
     // Set kernel start
     kpaging_data.kernel_start = meminfo.kernel_reserved_start;
@@ -121,7 +111,10 @@ void i386_paging_init() {
 
     // Set highest kernel-owned page
     kpaging_data.highest_page = meminfo.kernel_heap_start + EARLY_HEAP_MAXSIZE;
-    ASSERT(kpaging_data.highest_page <= KVIRT_MAX);
+
+    // Make sure there is enough room for the all allocated data + a window page
+    ASSERT(kpaging_data.highest_page + PAGE_SIZE <= KVIRT_RESERVED);
+    WINDOW_PAGE = (uint32_t *)(kpaging_data.highest_page + PAGE_SIZE);
 
     // Set page size
     kpaging_data.page_size = PAGE_SIZE;
@@ -129,9 +122,72 @@ void i386_paging_init() {
     // Set total memory
     kpaging_data.mem_total = meminfo.mem_lower + meminfo.mem_upper;
 
-    i386_kernel_mmu_data.early_init_done = true;
+    early_init_done = true;
 }
 
+/**
+ * Helper function to get a virtual pointer to a given physical address.
+ * Generally used to obtain a virtual pointer to a paging structure in memory (hence the return type).
+ *
+ * !!!WARNING!!! Subsequent calls to this function WILL INVALIDATE PREVIOUS POINTERS.
+ * If you obtain a virtual pointer then call another function which obtains its own
+ * virtual pointer YOUR ORIGINAL POINTER WILL BE INVALID! To be safe, you should assume
+ * that all virtual pointers must be reobtained by calling this function after ANY function call.
+ *
+ * @param phys_addr  address to obtain virtual pointer to
+ * @return           virtual pointer
+ */
+static uint32_t *get_virt_ptr(uint32_t phys_addr) {
+    ASSERT(phys_addr % 0x1000 == 0);
+    if (!early_init_done) {
+        // If early init isn't done, the physical and virtual memory layout are identical
+        return (uint32_t *)phys_addr;
+    }
+
+    // Otherwise, move the window page to point
+    uint32_t page_index = (uint32_t)WINDOW_PAGE / PAGE_SIZE;
+    uint32_t table_index = page_index / 1024;
+    uint32_t page_index_in_table = page_index % 1024;
+
+    // Since the WINDOW_PAGE was identity mapped along with its parent, we can directly access it
+    ((uint32_t *)TABLE_IN_DIR(table_index, i386_kernel_mmu_data.page_directory))[page_index_in_table]
+        = phys_addr | PT_PRESENT | PT_RW;
+
+    // We have to invlpg to prevent a cached window page from being used
+    // TODO: how expensive is this? is there a better way to do this?
+    invlpg(WINDOW_PAGE);
+
+    return WINDOW_PAGE;
+}
+
+/**
+ *  Helper function to allocate a page to be used as a page table
+ *  @param[out] phys_out  pointer to uint32_t to store physical address of page table at
+ *  @return               kernel return code
+ */
+static k_return_t allocate_page_table(uint32_t *phys_out) {
+    uint32_t phys; // Physical address of newly allocated page table
+    uint32_t *virt; // Virtual pointer to access newly allocated page table at
+    if (early_init_done) {
+        // To allocate a page table after early init, we must use the frame allocator and window page
+        uint32_t frame = i386_mem_allocate_frame();
+        if (!frame) return K_OOM;
+
+        phys = frame * PAGE_SIZE;
+        virt = get_virt_ptr(phys);
+    } else {
+        // To allocate a page during early init, kmalloc can be used
+        virt = (uint32_t *)kmalloc_ap(PAGE_SIZE, &phys, KALLOC_CRITICAL);
+        if (!virt) return K_OOM;
+    }
+
+    // Mark all entries in the page as R/W, not present
+    memset32((void *)virt, PT_RW, 1024);
+
+    *phys_out = phys;
+
+    return K_SUCCESS;
+}
 
 /**
  * Get the physical address for a given virtual addres
@@ -144,71 +200,20 @@ uint32_t i386_page_get_phys(i386_mmu_data_t *this, uint32_t address) {
     uint32_t page_index_in_table = page_index % 1024;
 
     // Check if this page table is present
-    if ((this->page_directory[table_index] & PD_PRESENT) == 0) {
+    uint32_t *pd_virt = get_virt_ptr(this->page_directory);
+    if ((pd_virt[table_index] & PD_PRESENT) == 0) {
         return 0;
     }
 
     // Check if this page is present
-    uint32_t page = this->page_tables_virt[table_index][page_index_in_table];
+    uint32_t *pt_virt = get_virt_ptr(TABLE_IN_DIR(table_index, this->page_directory));
+    uint32_t page = pt_virt[page_index_in_table];
     if ((page & PT_PRESENT) == 0) {
         return 0;
     }
 
     // Remove flags from page and return
     return page & 0xFFFFF000;
-}
-
-/**
- * Allocate contiguous pages and map them.
- * Used to obtain pages to refill the pagepool
- */
-k_return_t i386_allocate_empty_pages(i386_mmu_data_t *this, uint32_t n_pages, uintptr_t *phys_out,
-                                     uintptr_t *virt_out) {
-    if (!this->early_init_done) {
-        // Early init not done, we can simply use the placement allocator
-        uintptr_t addr = (uintptr_t)kmalloc(n_pages * PAGE_SIZE, KALLOC_CRITICAL);
-        if (!addr) return K_OOM;
-
-        // Since we're in paging early init, physical and virtual addresses are the same
-        *phys_out = addr;
-        *virt_out = addr;
-        return K_SUCCESS;
-    } else {
-        // Early init is done, we'll need to grab the pages from ASA and then map them
-        // with i386_allocate_page
-        uintptr_t virt_addr;
-        uintptr_t phys_addr;
-        uint32_t i;
-        k_return_t ret;
-
-        // Grab virtual pages from ASA
-        virt_addr = (uintptr_t)asa_alloc(n_pages);
-        if (!virt_addr) return K_OOM;
-
-        // Map first the virtual page to physical memory and save the starting pointer
-        ret = i386_allocate_page(this, virt_addr, PT_PRESENT | PT_RW, PD_PRESENT | PD_RW, &phys_addr);
-        if (K_FAILED(ret)) {
-            asa_free((void * )virt_addr, n_pages);
-            return ret;
-        }
-
-        // Map the rest
-        for (i=1; i<n_pages; i++) {
-            ret = i386_allocate_page(this, virt_addr + (i * PAGE_SIZE), PT_PRESENT | PT_RW,
-                                     PD_PRESENT | PD_RW, NULL);
-            if (K_FAILED(ret)) {
-                asa_free((void *)virt_addr, n_pages);
-                while (i-- > 0) {
-                    i386_free_page(this, virt_addr + (i * PAGE_SIZE));
-                }
-                return ret;
-            }
-        }
-
-        *phys_out = phys_addr;
-        *virt_out = virt_addr;
-        return K_SUCCESS;
-    }
 }
 
 /**
@@ -230,58 +235,32 @@ k_return_t i386_allocate_page(i386_mmu_data_t *this, uint32_t address, uint32_t 
 
     // Allocate a page frame
     uint32_t frame = i386_mem_allocate_frame();
-    if (!frame) return K_OOM;
-    //printk_debug("Page at 0x%x will be mapped to phys 0x%x", address, frame*0x1000);
-
-    // Check if this table is present and allocate it from the pagepool if not
-    if ((this->page_directory[table_index] & PD_PRESENT) == 0) {
-        // Check if the pagepool needs to be refilled
-        if (pagepool.n_free <= PAGEPOOL_THRESHOLD && pagepool.enable_threshold_check) {
-            // Temporarily disable threshold check while we handle it
-            pagepool.enable_threshold_check = false;
-
-            // Allocate PAGEPOOL_ENTRIES - PAGEPOOL_THRESHOLD new pages
-            uintptr_t new_phys, new_virt;
-            uint32_t n_pages = PAGEPOOL_ENTRIES - PAGEPOOL_THRESHOLD;
-            ret = i386_allocate_empty_pages(this, 1, &new_phys, &new_virt);
-            if (K_FAILED(ret)) return ret;
-            printk_debug("alloc empty pages got new phys: 0x%x virt: 0x%x", new_phys, new_virt); //sponge
-
-            // Insert new pages into pagepool
-            uint32_t i;
-            for(i=0;i<n_pages;i++) {
-                ret = i386_pagepool_insert(&pagepool, new_phys + (i * PAGE_SIZE), new_virt + (i * PAGE_SIZE));
-                if (K_FAILED(ret)) {
-                    PANIC("Failed to insert some new pages into pagepool!");
-                    break;
-                }
-            }
-
-            // Re-enable the threshold check
-            pagepool.enable_threshold_check = true;
-        }
-
-        i386_pagepool_entry_t entry;
-        ret = i386_pagepool_allocate(&pagepool, &entry);
-        if (K_FAILED(ret)) return ret;
-
-        // Wipe all entries (set to R/W, not present)
-        uint32_t i;
-        for (i=0; i<1024; i++) *((uint32_t *)entry.virt + i) = PT_RW;
-        //memset32((void *)entry.virt, PT_RW, 1024);
-        printk_debug("Pagepool returned phys: 0x%x virt: 0x%x", entry.phys, entry.virt); //sponge
-
-        this->page_directory[table_index] = entry.phys | pd_flags;
-        this->page_tables_virt[table_index] = (uint32_t *)entry.virt;
+    if (!frame) {
+        return K_OOM;
     }
+
+    // Check if this table is present and allocate it if not
+    uint32_t *pd_virt = get_virt_ptr(this->page_directory);
+    if ((pd_virt[table_index] & PD_PRESENT) == 0) {
+        uint32_t pt_phys;
+        ret = allocate_page_table(&pt_phys);
+        if (K_FAILED(ret)) {
+            i386_mem_free_frame(frame);
+            return ret;
+        }
+        // The call to allocate_page_table invalidated our pd_virt ptr, get it again
+        pd_virt = get_virt_ptr(this->page_directory);
+        pd_virt[table_index] = pt_phys | pd_flags;
+    }
+
+    // Get a virtual pointer to the parent page table
+    uint32_t *pt_virt = get_virt_ptr(TABLE_IN_DIR(table_index, pd_virt));
 
     // Update page in page table
     page = (frame * PAGE_SIZE) | pt_flags;
-    this->page_tables_virt[table_index][page_index_in_table] = page;
-    //printk_debug("provind phys out: 0x%x", (frame * PAGE_SIZE)); //sponge
-    if (out) {
+    pt_virt[page_index_in_table] = page;
+    if (out)
         *out = page & 0xFFFFF000;
-    }
 
     return K_SUCCESS;
 }
@@ -296,21 +275,23 @@ k_return_t i386_free_page(i386_mmu_data_t *this, uint32_t address) {
     uint32_t page_index = address / PAGE_SIZE;
     uint32_t table_index = page_index / 1024;
     uint32_t page_index_in_table = page_index % 1024;
-    uint32_t page = this->page_tables_virt[table_index][page_index_in_table];
 
-    // Skip request if it's table does not have a Page Directory Entry
-    if ((this->page_directory[table_index] & PD_PRESENT) == 0) {
+    // Skip request if its table does not exist
+    uint32_t *pd_virt = get_virt_ptr(this->page_directory);
+    if ((pd_virt[table_index] & PD_PRESENT) == 0) {
         return K_INVALOP;
     }
 
-    // Get page's physical frame address
-    uint32_t phys_addr_index = page / PAGE_SIZE;
-
-    // Set page to not present, read/write, supervisor
-    this->page_tables_virt[table_index][page_index_in_table] = PT_RW;
+    // Get frame address and set page to not present, read/write, supervisor
+    uint32_t *pt_virt = get_virt_ptr(TABLE_IN_DIR(table_index, pd_virt));
+    uint32_t phys_addr_index = pt_virt[page_index_in_table] / PAGE_SIZE;
+    pt_virt[page_index_in_table] = PT_RW;
 
     // Free page frame
     bitset_clear_bit(&i386_mem_frame_bitset, phys_addr_index);
+
+    // Invalidate the address
+    invlpg((void *)address);
 
     return K_SUCCESS;
 }
@@ -331,44 +312,23 @@ uint32_t i386_identity_map_page(i386_mmu_data_t *this, uint32_t address, uint32_
     k_return_t ret;
 
     // Check if this table is present and allocate it if not
-    if ((this->page_directory[table_index] & PD_PRESENT) == 0) {
-        // Check if the pagepool needs to be refilled
-        if (pagepool.n_free <= PAGEPOOL_THRESHOLD && pagepool.enable_threshold_check) {
-            // Temporarily disable threshold check while we handle it
-            pagepool.enable_threshold_check = false;
-
-            // Allocate PAGEPOOL_ENTRIES - PAGEPOOL_THRESHOLD new pages
-            uintptr_t new_phys, new_virt;
-            uint32_t n_pages = PAGEPOOL_ENTRIES - PAGEPOOL_THRESHOLD;
-            ret = i386_allocate_empty_pages(this, n_pages, &new_phys, &new_virt);
-            if (K_FAILED(ret)) return ret;
-
-            // Insert new pages into pagepool
-            uint32_t i;
-            for(i=0;i<n_pages;i++) {
-                ret = i386_pagepool_insert(&pagepool, new_phys + (i * PAGE_SIZE), new_virt + (i * PAGE_SIZE));
-                if (K_FAILED(ret)) {
-                    printk_debug("Only allocated %d out of %d pages.", i+1, n_pages);
-                    PANIC("Failed to insert some new pages into pagepool!");
-                    break;
-                }
-            }
-
-            // Re-enable the threshold check
-            pagepool.enable_threshold_check = true;
-        }
-
-        i386_pagepool_entry_t entry;
-        ret = i386_pagepool_allocate(&pagepool, &entry);
+    uint32_t *pd_virt = get_virt_ptr(this->page_directory);
+    if ((pd_virt[table_index] & PD_PRESENT) == 0) {
+        uint32_t pt_phys;
+        ret = allocate_page_table(&pt_phys);
         if (K_FAILED(ret)) return ret;
 
-        this->page_directory[table_index] = entry.phys | pd_flags;
-        this->page_tables_virt[table_index] = (uint32_t *)entry.virt;
+        // The call to allocate_page_table invalidated our pd_virt ptr, get it again
+        pd_virt = get_virt_ptr(this->page_directory);
+        pd_virt[table_index] = pt_phys | pd_flags;
     }
+
+    // Get a virtual pointer to the parent page table
+    uint32_t *pt_virt = get_virt_ptr((uint32_t)TABLE_IN_DIR(table_index, pd_virt));
 
     // Update page in page table
     page = (page_index * PAGE_SIZE) | pt_flags;
-    this->page_tables_virt[table_index][page_index_in_table] = page;
+    pt_virt[page_index_in_table] = page;
 
     // Mark this page frame as allocated in the bitset
     bitset_set_bit(&i386_mem_frame_bitset, page_index);
@@ -409,6 +369,7 @@ void __i386_page_fault_handler(i386_registers_t *r) {
 
     // Dump information about fault to screen
     printf("HALT - PAGE FAULT\n\n");
+    printf("EIP: 0x%x\n", r->eip);
     printf("Faulting address: 0x%x\n", faulting_address);
     if (present) printf("Page not present\n");
     if (rw) printf("Page not writable\n");

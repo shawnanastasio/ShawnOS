@@ -30,7 +30,7 @@ k_return_t asa_init(uint32_t page_size) {
     if (!bitset_start) return K_OOM;
     bitset_init(&kasa_data.pages, bitset_start, n_entries);
 
-    // Mark all pages from 0 up to kpaging_data.highest_page as used
+    // Mark all pages from 0 up to KVIRT_RESERVED as used
     uint32_t i;
     uint32_t max = KVIRT_RESERVED / kasa_data.page_size;
     for (i=0; i<max; i++) {

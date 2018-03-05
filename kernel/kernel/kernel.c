@@ -43,7 +43,6 @@
 void kernel_early(uint32_t mboot_magic, multiboot_info_t *mboot_header) {
     // Set up kernel terminal for early output
     //kernel_terminal_init(14);
-
     // Verify multiboot magic
     if (mboot_magic != MULTIBOOT_BOOTLOADER_MAGIC) {
         printk_debug("Invalid Multiboot Magic!");
@@ -110,27 +109,35 @@ void kernel_main() {
     printf("Heap curpos: 0x%x\n", meminfo.kernel_heap_curpos);
     printf("kHighest page: 0x%x\n", kpaging_data.highest_page);
 
-    asa_alloc(1000);
-    uintptr_t phys, virt;
-    k_return_t ret = i386_allocate_empty_pages(&i386_kernel_mmu_data, 1, &phys, &virt);
-    ASSERT(!K_FAILED(ret));
-    printk_debug("i386_a_e_p returned phys: 0x%x virt: 0x%x", phys, virt);
 
+    //i386_allocate_page(&i386_kernel_mmu_data, 0x19b000, PT_PRESENT | PT_RW, PD_PRESENT | PD_RW, NULL);
+    //memset((void *)0x19b000, 0x00, 0x1000);
+    //i386_allocate_page(&i386_kernel_mmu_data, 0x400000, PT_PRESENT | PT_RW, PD_PRESENT | PD_RW, NULL);
+    //memset((void *)0x400000, 0x00, 0x1000);
+
+#if 1 // Test page allocation
+    k_return_t ret;
     for (;;) {
         void *tmp = asa_alloc(1);
+        uint32_t phys;
         if (!tmp) {
             PANIC("Out of address space!");
         }
         ret = i386_allocate_page(&i386_kernel_mmu_data, (uint32_t)tmp,
-            PT_PRESENT | PT_RW, PD_PRESENT | PD_RW, NULL);
+            PT_PRESENT | PT_RW, PD_PRESENT | PD_RW, &phys);
         if (K_FAILED(ret)) {
             PANIC("FAILED TO ALLOCATE PAGE!");
         }
+
+
+        memset(tmp, 0xFF, 0x1000);
     }
-#if 0
+#endif
+
+#if 0 // Test kernel heap
     for (;;) {
         uint32_t tmp = (uint32_t)kmalloc(0x999, KALLOC_GENERAL);
-        if (!tmp) {printk_debug("REEEEE"); break;}
+        if (!tmp) {printk_debug("kmalloc failed"); break;}
         tmp = tmp;
         //printk_debug("writing ff to 0x%x", tmp);
         //memset((void *)tmp, 0xFF, 0x1000);
@@ -139,6 +146,7 @@ void kernel_main() {
     }
 #endif
 
+#if 0 // Test ASA
     for (;;) {
         // Stress ASA
         void *tmp = asa_alloc(1);
@@ -146,6 +154,7 @@ void kernel_main() {
             PANIC("GOOD: ASA returned NULL");
         }
     }
+#endif
 
     for(;;);
 }
