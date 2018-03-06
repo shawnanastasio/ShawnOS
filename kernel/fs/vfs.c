@@ -50,7 +50,7 @@ static inline fs_driver_t *vfs_get_driver(char *driver) {
  */
 void vfs_install_driver(fs_driver_t *driver) {
     // Allocate space for a the new driver
-    fs_driver_t *new = (fs_driver_t *)kmalloc(sizeof(fs_driver_t));
+    fs_driver_t *new = (fs_driver_t *)kmalloc(sizeof(fs_driver_t), KALLOC_GENERAL);
 
     // Copy the driver into newly allocated memory
     memcpy(new, driver, sizeof(fs_driver_t));
@@ -79,11 +79,11 @@ k_return_t vfs_mount(char *driver, uint32_t device, fs_inode_t *mount_point,
     fs_driver_t *driver_info = vfs_get_driver(driver);
     if (!driver_info) {
         // No driver installed for requested filesystem
-        return -K_NOTSUP;
+        return K_NOTSUP;
     }
 
     // Call driver's mount_fs and get returned superblock
-    vfs_superblock_t *newsuper = (vfs_superblock_t *)kmalloc(sizeof(vfs_superblock_t));
+    vfs_superblock_t *newsuper = (vfs_superblock_t *)kmalloc(sizeof(vfs_superblock_t), KALLOC_GENERAL);
     k_return_t res = driver_info->fs_mount(device, mount_point, options, newsuper);
     if (res < 0) {
         // Driver failed to mount filesystem
@@ -93,7 +93,7 @@ k_return_t vfs_mount(char *driver, uint32_t device, fs_inode_t *mount_point,
     // Add superblock to internal list
     if (vfs_superblocks_size + 1 > VFS_MAX_SUPERBLOCKS) {
         // Not enough space in superblocks list
-        return -K_OOM;
+        return K_OOM;
     }
     vfs_superblocks[vfs_superblocks_size++] = newsuper;
 
@@ -132,7 +132,7 @@ k_return_t vfs_inode_read(fs_inode_t *node, uint32_t offset, uint32_t size, uint
     if (ops && ops->read) {
         return ops->read(node, offset, size, buf);
     }
-    return -K_UNIMPL;
+    return K_UNIMPL;
 }
 
 /**
@@ -148,7 +148,7 @@ k_return_t vfs_inode_write(fs_inode_t *node, uint32_t offset, uint32_t size, uin
     if (ops && ops->write) {
         return ops->write(node, offset, size, buf);
     }
-    return -K_UNIMPL;
+    return K_UNIMPL;
 }
 
 /**
@@ -166,7 +166,7 @@ k_return_t vfs_inode_open(fs_inode_t *node) {
         SPINLOCK_UNLOCK(vfs_refcount);
         return ops->open(node);
     }
-    return -K_UNIMPL;
+    return K_UNIMPL;
 }
 
 /**
@@ -184,7 +184,7 @@ k_return_t vfs_inode_close(fs_inode_t *node) {
         SPINLOCK_UNLOCK(vfs_refcount);
         return ops->close(node);
     }
-    return -K_UNIMPL;
+    return K_UNIMPL;
 }
 
 /**
@@ -200,7 +200,7 @@ k_return_t vfs_inode_readdir(fs_inode_t *node, uint32_t num, fs_dirent_t *res) {
     if (ops && ops->readdir) {
         return ops->readdir(node, num, res);
     }
-    return -K_UNIMPL;
+    return K_UNIMPL;
 }
 
 /**
@@ -216,5 +216,5 @@ k_return_t vfs_inode_finddir(fs_inode_t *node, char *name, fs_dirent_t *res) {
     if (ops && ops->finddir) {
         return ops->finddir(node, name, res);
     }
-    return -K_UNIMPL;
+    return K_UNIMPL;
 }

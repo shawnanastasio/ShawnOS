@@ -3,6 +3,8 @@ section .text
 global load_page_dir
 global enable_paging
 global get_faulting_address
+global invlpg
+global flush_tlb
 
 load_page_dir:
     push ebp ; Preserve ebp on the stack
@@ -30,4 +32,24 @@ enable_paging:
 ; Get value of cr2
 get_faulting_address:
     mov eax, cr2
+    ret
+
+invlpg:
+    push ebp
+    mov ebp, esp
+    mov eax, dword [ebp+8]
+    invlpg [eax]
+    mov esp, ebp
+    pop ebp
+    ret
+
+flush_tlb:
+    push ebp
+    mov ebp, esp
+
+    mov eax, cr3
+    mov cr3, eax
+
+    mov esp, ebp
+    pop ebp
     ret

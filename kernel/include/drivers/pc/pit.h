@@ -14,6 +14,8 @@ struct pit_routine {
     void *func; // Function to call at each interval
 };
 
+extern volatile uint32_t pit_total_timer_ticks;
+
 uint16_t pit_install_scheduler_routine(struct pit_routine r);
 void pit_uninstall_scheduler_routine(uint16_t index);
 

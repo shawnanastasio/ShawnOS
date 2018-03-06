@@ -19,6 +19,7 @@
 #include <mm/heap.h>
 #include <mm/paging.h>
 #include <mm/alloc.h>
+#include <mm/asa.h>
 
 /* Driver includes */
 #include <drivers/vga/textmode.h>
@@ -39,12 +40,9 @@
 #include <arch/i386/mem.h>
 #include <arch/i386/paging.h>
 
-extern struct idt_entry idt[256];
-
 void kernel_early(uint32_t mboot_magic, multiboot_info_t *mboot_header) {
     // Set up kernel terminal for early output
     //kernel_terminal_init(14);
-
     // Verify multiboot magic
     if (mboot_magic != MULTIBOOT_BOOTLOADER_MAGIC) {
         printk_debug("Invalid Multiboot Magic!");
@@ -59,12 +57,15 @@ void kernel_early(uint32_t mboot_magic, multiboot_info_t *mboot_header) {
     printk_debug("IDT Installed!");
     i386_mem_init(mboot_header);
     printk_debug("Memory Allocation functions enabled!");
+
+    // Init Address Space Allocator before enabling paging
+    ASSERT(asa_init(PAGE_SIZE) == K_SUCCESS);
+
     i386_paging_init();
     printk_debug("Paging enabled!");
 
     // Install kernel heap as default malloc/free provider
     kheap_kalloc_install();
-
 
     // Install drivers
     pit_timer_install_irq(); // Install PIT driver
@@ -78,7 +79,7 @@ void kernel_early(uint32_t mboot_magic, multiboot_info_t *mboot_header) {
     };
     pit_install_scheduler_routine(kernel_task_pit_routine);
 
-    _i386_print_reserved();
+    //_i386_print_reserved();
 
     __asm__ __volatile__ ("sti");
     printk_debug("Interrupts Enabled!");
@@ -102,20 +103,58 @@ void kernel_main() {
     }
     */
 
+    //kernel_thread_sleep(10);
+
     printf("Heap start: 0x%x\n", meminfo.kernel_heap_start);
     printf("Heap curpos: 0x%x\n", meminfo.kernel_heap_curpos);
     printf("kHighest page: 0x%x\n", kpaging_data.highest_page);
 
-    // Test heap
-    uintptr_t *test1 = kmalloc_a(0x1050);
-    printf("Got 0x1050 bytes at 0x%x\n", (uintptr_t)test1);
-    *test1 = 0xDEADBEEF;
-    kfree(test1);
-    uintptr_t *test2 = kmalloc_a(0x1060);
-    printf("Got 0x1060 bytes at 0x%x\n", (uintptr_t)test2);
-    test1 = kmalloc(0x10050);
-    printf("Got 0x10050 bytes at 0x%x\n", (uintptr_t)test1);
 
+    //i386_allocate_page(&i386_kernel_mmu_data, 0x19b000, PT_PRESENT | PT_RW, PD_PRESENT | PD_RW, NULL);
+    //memset((void *)0x19b000, 0x00, 0x1000);
+    //i386_allocate_page(&i386_kernel_mmu_data, 0x400000, PT_PRESENT | PT_RW, PD_PRESENT | PD_RW, NULL);
+    //memset((void *)0x400000, 0x00, 0x1000);
+
+#if 1 // Test page allocation
+    k_return_t ret;
+    for (;;) {
+        void *tmp = asa_alloc(1);
+        uint32_t phys;
+        if (!tmp) {
+            PANIC("Out of address space!");
+        }
+        ret = i386_allocate_page(&i386_kernel_mmu_data, (uint32_t)tmp,
+            PT_PRESENT | PT_RW, PD_PRESENT | PD_RW, &phys);
+        if (K_FAILED(ret)) {
+            PANIC("FAILED TO ALLOCATE PAGE!");
+        }
+
+
+        memset(tmp, 0xFF, 0x1000);
+    }
+#endif
+
+#if 0 // Test kernel heap
+    for (;;) {
+        uint32_t tmp = (uint32_t)kmalloc(0x999, KALLOC_GENERAL);
+        if (!tmp) {printk_debug("kmalloc failed"); break;}
+        tmp = tmp;
+        //printk_debug("writing ff to 0x%x", tmp);
+        //memset((void *)tmp, 0xFF, 0x1000);
+        //kfree((void*)tmp);
+        //printk_debug("Got 0x10000 bytes at 0x%x", tmp);
+    }
+#endif
+
+#if 0 // Test ASA
+    for (;;) {
+        // Stress ASA
+        void *tmp = asa_alloc(1);
+        if (!tmp) {
+            PANIC("GOOD: ASA returned NULL");
+        }
+    }
+#endif
 
     for(;;);
 }
