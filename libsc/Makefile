@@ -46,7 +46,7 @@ libsk.a: $(LIBSK_OBJS)
 %.libsk.o: %.c
 	$(CC) -c $< -o $@ $(LIBSK_CFLAGS)
 
-clean:
+libsk_clean:
 	rm -f $(LIBSK_BINARIES) $(OBJS) $(LIBSK_OBJS) *.o */*.o */*/*.o
 
 libsk_install: libsk_install_headers libsk_install_libs

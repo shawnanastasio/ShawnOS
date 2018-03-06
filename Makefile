@@ -28,12 +28,16 @@ MKRESCUE:=$(shell command -v grub-mkrescue 2>/dev/null || command -v grub2-mkres
 XORRISO:=$(shell command -v xorriso 2>/dev/null)
 QEMU:=$(shell command -v qemu-system-$(HOSTARCH) 2>/dev/null)
 
+# Default target
+.PHONY: all
+all: build
+
 # Include makefiles from kernel and libsc
 include kernel/Makefile
 include libsc/Makefile
 
 # Top level PHONYs. These are what you should call.
-.PHONY: all qemu iso build clean
+.PHONY: qemu iso build clean
 
 clean: clean_all
 	rm -rfv sysroot
